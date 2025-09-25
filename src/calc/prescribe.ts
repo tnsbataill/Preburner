@@ -1,14 +1,15 @@
-import {
+import type {
   CarbPlan,
   MacroTargets,
   PlannedWorkout,
   Profile,
   SessionType,
   WindowPlan,
-} from '../types';
-import { CarbComputationResult, computeCarbPlan } from './carb';
+} from '../types.js';
+import { type CarbComputationResult, computeCarbPlan } from './carb.js';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
+const SECONDS_PER_HOUR = 60 * 60;
 
 const HARD_SESSION_TYPES: SessionType[] = ['Threshold', 'VO2', 'Race'];
 
@@ -111,7 +112,7 @@ export function estimateWorkoutKilojoules(workout: PlannedWorkout): number {
       Rest: 0,
     };
     const watts = workout.ftp_watts_at_plan * (intensityFactor[workout.type] ?? 0.7);
-    return (watts * workout.duration_hr * MS_PER_HOUR) / 1000;
+    return (watts * workout.duration_hr * SECONDS_PER_HOUR) / 1000;
   }
 
   return workout.duration_hr * 500;

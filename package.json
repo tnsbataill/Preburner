@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo": "tsc --project tsconfig.demo.json && node --experimental-specifier-resolution=node dist-demo/scripts/demo.js"
   },
   "dependencies": {
     "react": "^18.3.1",

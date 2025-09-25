@@ -4,3 +4,5 @@ dist
 yarn.lock
 .pnpm-lock.yaml
 .env
+
+dist-demo

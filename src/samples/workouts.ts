@@ -1,4 +1,4 @@
-import { PlannedWorkout } from '../types';
+import type { PlannedWorkout } from '../types.js';
 
 export const plannedWorkouts: PlannedWorkout[] = [
   {
