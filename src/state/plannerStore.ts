@@ -30,6 +30,7 @@ interface IntervalsConnectionSettings {
   apiKey: string;
   startDateISO: string;
   rangeDays: number;
+  athleteId: string;
 }
 
 type PlannerDataSource = 'sample' | 'intervals';
@@ -166,6 +167,7 @@ function createDefaultConnection(): IntervalsConnectionSettings {
     apiKey: '',
     startDateISO: SAMPLE_START_ISO.slice(0, 10),
     rangeDays: DEFAULT_RANGE_DAYS,
+    athleteId: '',
   };
 }
 
@@ -187,7 +189,23 @@ function mergeConnectionSettings(
   if (typeof stored.rangeDays === 'number') {
     merged.rangeDays = clampRangeDays(stored.rangeDays);
   }
+  if (typeof stored.athleteId === 'string') {
+    merged.athleteId = stored.athleteId;
+  }
   return merged;
+}
+
+function parseAthleteId(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const numeric = Number(trimmed);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+  const rounded = Math.round(numeric);
+  return rounded > 0 ? rounded : undefined;
 }
 
 function computeIntervalsRange(settings: IntervalsConnectionSettings): {
@@ -201,7 +219,7 @@ function computeIntervalsRange(settings: IntervalsConnectionSettings): {
 }
 
 function shouldResetLastSync(key: keyof IntervalsConnectionSettings): boolean {
-  return key === 'rangeDays' || key === 'startDateISO';
+  return key === 'rangeDays' || key === 'startDateISO' || key === 'athleteId';
 }
 
 export const usePlannerStore = create<PlannerState>((set, get) => {
@@ -297,6 +315,10 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
 
         if (connection.apiKey) {
           pushSyncLog('info', 'Intervals.icu API key detected');
+          const parsedAthleteId = parseAthleteId(connection.athleteId);
+          if (parsedAthleteId) {
+            pushSyncLog('info', 'Using provided athlete ID', String(parsedAthleteId));
+          }
           pushSyncLog('info', 'Sync window selected', formatRangeDetail(startISO, endISO));
           const cached = await loadCachedWorkouts(startISO, endISO);
           if (cached) {
@@ -311,7 +333,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           } else {
             try {
               pushSyncLog('info', 'Requesting workouts from Intervals.icu');
-              const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug);
+              const provider = createIntervalsProvider(
+                connection.apiKey.trim(),
+                forwardIntervalsDebug,
+                { athleteId: parsedAthleteId },
+              );
               workouts = await provider.getPlannedWorkouts(startISO, endISO);
               dataSource = 'intervals';
               lastSyncISO = new Date().toISOString();
@@ -404,6 +430,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       } else if (key === 'rangeDays') {
         const numeric = typeof value === 'number' ? value : Number(value);
         updated.rangeDays = clampRangeDays(numeric);
+      } else if (key === 'athleteId') {
+        updated.athleteId = String(value ?? '');
       }
       const nextState: Partial<PlannerState> = {
         connection: updated,
@@ -433,7 +461,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         let lastSyncISO: string | undefined;
 
         if (connection.apiKey) {
-          const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug);
+          const parsedAthleteId = parseAthleteId(connection.athleteId);
+          if (parsedAthleteId) {
+            pushSyncLog('info', 'Using provided athlete ID', String(parsedAthleteId));
+          }
+          const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug, {
+            athleteId: parsedAthleteId,
+          });
           workouts = await provider.getPlannedWorkouts(startISO, endISO);
           dataSource = 'intervals';
           lastSyncISO = new Date().toISOString();
