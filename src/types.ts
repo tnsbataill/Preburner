@@ -1,83 +1,82 @@
-export type UUID = string;
+export type SessionType = 'Endurance' | 'Tempo' | 'Threshold' | 'VO2' | 'Race' | 'Rest';
 
-export type Discipline = 'bike' | 'run' | 'swim' | 'strength';
+export type EfficiencyPreset = 'WorldClass' | 'Elite' | 'Competitive' | 'Enthusiast';
 
-export type WorkoutFocus = 'Endurance' | 'VO2' | 'Tempo' | 'Threshold' | 'Recovery';
-
-export type WorkoutIntervalType =
-  | 'warmup'
-  | 'steady'
-  | 'interval'
-  | 'recovery'
-  | 'cooldown'
-  | 'skills';
-
-export type TargetKind = 'power' | 'heartRate' | 'pace' | 'cadence' | 'rpe';
-
-export interface NumericTarget {
-  kind: Exclude<TargetKind, 'pace'>;
-  unit: 'percentFtp' | 'watts' | 'bpm' | 'percentMaxHr' | 'rpm' | 'rpe';
-  lower: number;
-  upper: number;
-  notes?: string;
+export interface Profile {
+  sex: 'M' | 'F';
+  age_years: number;
+  height_cm: number;
+  weight_kg: number;
+  ftp_watts?: number;
+  efficiencyPreset: EfficiencyPreset;
+  efficiency: number;
+  activityFactorDefault: number;
+  activityFactorOverrides?: Record<string, number>;
+  targetKgPerWeek: number;
+  kcalPerKg: number;
+  deficitCapPerWindow: number;
+  windowPctCap?: number;
+  protein_g_per_kg: number;
+  fat_g_per_kg_min: number;
+  carbBands: Record<SessionType, [number, number]>;
+  carbSplit: { pre: number; during: number; post: number };
+  gluFruRatio: number;
+  useImperial: boolean;
 }
 
-export interface PaceTarget {
-  kind: 'pace';
-  unit: 'min_per_km' | 'min_per_mi';
-  lower: number;
-  upper: number;
-  notes?: string;
-}
-
-export type IntervalTarget = NumericTarget | PaceTarget;
-
-export interface WorkoutInterval {
-  id: UUID;
-  type: WorkoutIntervalType;
-  name: string;
-  durationMinutes: number;
-  primaryTarget: IntervalTarget;
-  secondaryTargets?: IntervalTarget[];
-  notes?: string;
+export interface Step {
+  start_s: number;
+  duration_s: number;
+  target_type: '%FTP' | 'Watts' | 'RPE';
+  target_lo?: number;
+  target_hi?: number;
 }
 
 export interface PlannedWorkout {
-  id: UUID;
-  title: string;
-  focus: WorkoutFocus;
-  discipline: Discipline;
-  scheduledFor: string; // ISO8601 date string
-  totalMinutes: number;
-  description?: string;
-  intervals: WorkoutInterval[];
-  notes?: string;
+  id: string;
+  source: 'intervals' | 'file';
+  title?: string;
+  type: SessionType;
+  startISO: string;
+  endISO: string;
+  duration_hr: number;
+  planned_kJ?: number;
+  ftp_watts_at_plan?: number;
+  steps?: Step[];
+  kj_source: 'ICU Structured' | 'Estimated (steps)' | 'Estimated (IF/TSS)';
 }
 
-export interface ProfileMetrics {
-  ftp: number;
-  maxHeartRate: number;
-  lactateThresholdHeartRate?: number;
-  vo2Max?: number;
-  weightKg?: number;
+export interface CarbPlan {
+  g_per_hr: number;
+  pre_g: number;
+  during_g: number;
+  post_g: number;
+  gluFruRatio: number;
 }
 
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
-
-export interface ProfileAvailability {
-  daysPerWeek: number;
-  longestSessionMinutes: number;
-  earlyMorningOk: boolean;
+export interface WindowPlan {
+  windowStartISO: string;
+  windowEndISO: string;
+  prevWorkoutId: string;
+  nextWorkoutId: string;
+  nextWorkoutType: SessionType;
+  need_kcal: number;
+  target_kcal: number;
+  activityFactorApplied: number;
+  carbs: CarbPlan;
+  notes: string[];
 }
 
-export interface Profile {
-  id: UUID;
-  name: string;
-  unitSystem: 'metric' | 'imperial';
-  experienceLevel: ExperienceLevel;
-  preferredDiscipline: Discipline;
-  metrics: ProfileMetrics;
-  availability: ProfileAvailability;
-  notes?: string;
-  lastUpdated: string; // ISO8601 timestamp
+export interface WeeklyPlan {
+  weekKey: string;
+  weekStartISO: string;
+  weekEndISO: string;
+  weeklyTargetDeficit_kcal: number;
+  weeklyAllocated_kcal: number;
+  carryOver_kcal?: number;
+}
+
+export interface WeightEntry {
+  dateISO: string;
+  weight_kg: number;
 }

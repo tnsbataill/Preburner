@@ -1,130 +1,204 @@
-import type { IntervalTarget } from './types';
+import { useMemo } from 'react';
+import { buildWindows } from './calc/prescribe';
+import { allocateWeeklyDeficits } from './calc/weekly';
 import { plannedWorkouts } from './samples/workouts';
 import { sampleProfile } from './samples/profile';
 
-function formatTarget(range: Pick<IntervalTarget, 'lower' | 'upper' | 'unit'>) {
-  const unitLabel = range.unit
-    .replace('percentFtp', '% FTP')
-    .replace('percentMaxHr', '% max HR')
-    .replace('min_per_km', 'min/km')
-    .replace('min_per_mi', 'min/mi');
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-  return `${range.lower}–${range.upper} ${unitLabel}`;
+function formatNumber(value: number, digits = 0) {
+  return value.toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
 }
 
 export default function App() {
+  const { windows, weekly } = useMemo(() => {
+    const baseWindows = buildWindows(sampleProfile, plannedWorkouts);
+    return allocateWeeklyDeficits(sampleProfile, baseWindows, plannedWorkouts);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 p-6 text-slate-100">
       <main className="mx-auto flex max-w-5xl flex-col gap-8">
         <header>
-          <h1 className="text-3xl font-semibold tracking-tight">Preburner Samples</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Preburner Core Engine</h1>
           <p className="mt-2 text-slate-400">
-            Minimal Vite + React + Tailwind project with domain contracts and seed data.
+            Pure-function calculations using the sample profile and workouts.
           </p>
         </header>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-slate-950/40">
           <h2 className="text-2xl font-semibold text-amber-300">Profile</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             <div>
-              <p className="text-lg font-medium">{sampleProfile.name}</p>
-              <p className="text-sm text-slate-400">
-                {sampleProfile.experienceLevel.charAt(0).toUpperCase() +
-                  sampleProfile.experienceLevel.slice(1)}{' '}
-                athlete · Prefers {sampleProfile.preferredDiscipline}
-              </p>
-              <p className="mt-2 text-sm text-slate-400">{sampleProfile.notes}</p>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Sex</dt>
+              <dd className="text-sm">{sampleProfile.sex}</dd>
             </div>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <div>
-                <dt className="text-slate-400">FTP</dt>
-                <dd className="text-slate-100">{sampleProfile.metrics.ftp} W</dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Max HR</dt>
-                <dd className="text-slate-100">{sampleProfile.metrics.maxHeartRate} bpm</dd>
-              </div>
-              {sampleProfile.metrics.lactateThresholdHeartRate ? (
-                <div>
-                  <dt className="text-slate-400">LTHR</dt>
-                  <dd className="text-slate-100">
-                    {sampleProfile.metrics.lactateThresholdHeartRate} bpm
-                  </dd>
-                </div>
-              ) : null}
-              {sampleProfile.metrics.vo2Max ? (
-                <div>
-                  <dt className="text-slate-400">VO₂ Max</dt>
-                  <dd className="text-slate-100">{sampleProfile.metrics.vo2Max}</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="text-slate-400">Days / week</dt>
-                <dd className="text-slate-100">{sampleProfile.availability.daysPerWeek}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Longest session</dt>
-                <dd className="text-slate-100">
-                  {sampleProfile.availability.longestSessionMinutes} minutes
-                </dd>
-              </div>
-            </dl>
-          </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Age</dt>
+              <dd className="text-sm">{sampleProfile.age_years}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Weight</dt>
+              <dd className="text-sm">{formatNumber(sampleProfile.weight_kg, 1)} kg</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Height</dt>
+              <dd className="text-sm">{formatNumber(sampleProfile.height_cm, 0)} cm</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">FTP</dt>
+              <dd className="text-sm">{sampleProfile.ftp_watts} W</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Efficiency</dt>
+              <dd className="text-sm">{(sampleProfile.efficiency * 100).toFixed(1)}%</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Activity factor</dt>
+              <dd className="text-sm">{sampleProfile.activityFactorDefault.toFixed(2)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Deficit cap / window</dt>
+              <dd className="text-sm">{formatNumber(sampleProfile.deficitCapPerWindow)} kcal</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">Weekly target</dt>
+              <dd className="text-sm">
+                {formatNumber(Math.abs(sampleProfile.targetKgPerWeek) * sampleProfile.kcalPerKg)} kcal
+              </dd>
+            </div>
+          </dl>
         </section>
 
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-emerald-300">Planned Workouts</h2>
-          {plannedWorkouts.map((workout) => (
-            <article
-              key={workout.id}
-              className="rounded-lg border border-emerald-900/60 bg-emerald-900/20 p-6 shadow-lg shadow-emerald-950/30"
-            >
-              <header className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
-                <div>
-                  <h3 className="text-xl font-semibold text-emerald-200">{workout.title}</h3>
-                  <p className="text-sm text-emerald-300/70">
-                    {workout.focus} · {workout.discipline} · {workout.totalMinutes} min
+          <div className="grid gap-3 md:grid-cols-2">
+            {plannedWorkouts.map((workout) => (
+              <article
+                key={workout.id}
+                className="rounded-lg border border-emerald-900/60 bg-emerald-900/10 p-4 shadow-lg shadow-emerald-950/20"
+              >
+                <header className="flex flex-col gap-1">
+                  <h3 className="text-lg font-semibold text-emerald-100">{workout.title}</h3>
+                  <p className="text-xs uppercase tracking-wide text-emerald-300/70">
+                    {workout.type} • {formatNumber(workout.duration_hr, 2)} h
                   </p>
-                </div>
-                <p className="text-sm text-emerald-300/70">Scheduled: {workout.scheduledFor}</p>
-              </header>
-              <p className="mt-3 text-sm text-emerald-100/80">{workout.description}</p>
-              <ul className="mt-4 space-y-3 text-sm">
-                {workout.intervals.map((interval) => (
-                  <li
-                    key={interval.id}
-                    className="rounded-md border border-emerald-800/40 bg-emerald-800/30 p-3"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-medium text-emerald-200">
-                        {interval.name}
-                        <span className="ml-2 text-xs uppercase tracking-wide text-emerald-300/70">
-                          {interval.type}
-                        </span>
-                      </span>
-                      <span className="font-mono text-xs text-emerald-200/80">
-                        {interval.durationMinutes} min
-                      </span>
+                  <p className="text-xs text-emerald-200/80">{formatDate(workout.startISO)}</p>
+                </header>
+                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <dt className="text-emerald-300/70">Planned energy</dt>
+                    <dd className="font-mono text-emerald-100">{formatNumber(workout.planned_kJ ?? 0)} kJ</dd>
+                  </div>
+                  <div>
+                    <dt className="text-emerald-300/70">kJ source</dt>
+                    <dd className="text-emerald-100/80">{workout.kj_source}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-sky-300">Windows</h2>
+          <div className="grid gap-3">
+            {windows.map((window) => (
+              <article
+                key={`${window.prevWorkoutId}-${window.nextWorkoutId}`}
+                className="rounded-lg border border-sky-900/60 bg-sky-900/10 p-4 shadow-lg shadow-sky-950/20"
+              >
+                <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-sky-100">{window.nextWorkoutType} window</h3>
+                    <p className="text-xs text-sky-200/80">Next workout: {window.nextWorkoutId}</p>
+                  </div>
+                  <p className="text-xs text-sky-200/70">
+                    {formatDate(window.windowStartISO)} → {formatDate(window.windowEndISO)}
+                  </p>
+                </header>
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+                  <div>
+                    <dt className="text-sky-300/70">Need</dt>
+                    <dd className="font-mono text-sky-100">{formatNumber(window.need_kcal)} kcal</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sky-300/70">Target</dt>
+                    <dd className="font-mono text-sky-100">{formatNumber(window.target_kcal)} kcal</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sky-300/70">Activity factor</dt>
+                    <dd className="text-sky-100">{window.activityFactorApplied.toFixed(2)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sky-300/70">Carb plan</dt>
+                    <dd className="text-sky-100">
+                      {formatNumber(window.carbs.g_per_hr, 1)} g/hr · pre {formatNumber(window.carbs.pre_g, 1)} g ·
+                      during {formatNumber(window.carbs.during_g, 1)} g
+                    </dd>
+                  </div>
+                </dl>
+                {window.notes.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-sky-200/80">
+                    {window.notes.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-fuchsia-300">Weekly summary</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {weekly.map((week) => (
+              <article
+                key={week.weekKey}
+                className="rounded-lg border border-fuchsia-900/60 bg-fuchsia-900/10 p-4 shadow-lg shadow-fuchsia-950/20"
+              >
+                <header className="flex flex-col gap-1">
+                  <h3 className="text-lg font-semibold text-fuchsia-100">{week.weekKey}</h3>
+                  <p className="text-xs text-fuchsia-200/80">
+                    {formatDate(week.weekStartISO)} → {formatDate(week.weekEndISO)}
+                  </p>
+                </header>
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="text-fuchsia-300/70">Target deficit</dt>
+                    <dd className="font-mono text-fuchsia-100">
+                      {formatNumber(week.weeklyTargetDeficit_kcal)} kcal
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-fuchsia-300/70">Allocated</dt>
+                    <dd className="font-mono text-fuchsia-100">
+                      {formatNumber(week.weeklyAllocated_kcal)} kcal
+                    </dd>
+                  </div>
+                  {week.carryOver_kcal ? (
+                    <div>
+                      <dt className="text-fuchsia-300/70">Carryover</dt>
+                      <dd className="font-mono text-fuchsia-100">
+                        {formatNumber(week.carryOver_kcal)} kcal
+                      </dd>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100/80">
-                      <span>Primary: {formatTarget(interval.primaryTarget)}</span>
-                      {interval.secondaryTargets?.map((target) => (
-                        <span key={`${interval.id}-${target.kind}`}>
-                          Secondary: {formatTarget(target)}
-                        </span>
-                      ))}
-                    </div>
-                    {interval.notes ? (
-                      <p className="mt-2 text-xs text-emerald-100/70">{interval.notes}</p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {workout.notes ? (
-                <p className="mt-4 text-xs text-emerald-200/80">{workout.notes}</p>
-              ) : null}
-            </article>
-          ))}
+                  ) : null}
+                </dl>
+              </article>
+            ))}
+          </div>
         </section>
       </main>
     </div>
