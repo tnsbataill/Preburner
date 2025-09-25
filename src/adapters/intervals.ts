@@ -601,7 +601,28 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       const detail = summariseErrorBody(body);
       const statusText = response.statusText ? ` ${response.statusText}` : '';
       const suffix = detail ? `: ${detail}` : '';
-      this.log('error', `Intervals.icu responded ${response.status}${statusText} for GET ${summaryPath}`, detail);
+      const summaryMessage = `Intervals.icu responded ${response.status}${statusText} for GET ${summaryPath}`;
+
+      let guidance: string | undefined;
+      if (response.status === 403) {
+        if (/\/athlete\/\d+\/events/.test(summaryPath)) {
+          guidance =
+            'Intervals.icu denied access to planned workouts (403). Ensure your API key allows planned workout access on Intervals.icu → Settings → API and that the athlete has shared planned workouts with you.';
+        } else {
+          guidance =
+            'Intervals.icu rejected the request (403). Verify your API key permissions on Intervals.icu → Settings → API.';
+        }
+      }
+
+      this.log('error', summaryMessage, detail);
+
+      if (guidance) {
+        this.log('error', guidance, detail);
+        throw new Error(
+          `${guidance} (Original error: Intervals.icu request failed (${response.status}${statusText}) for GET ${summaryPath}${suffix})`,
+        );
+      }
+
       throw new Error(
         `Intervals.icu request failed (${response.status}${statusText}) for GET ${summaryPath}${suffix}`,
       );
