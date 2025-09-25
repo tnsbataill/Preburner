@@ -200,10 +200,17 @@ function parseAthleteId(value: string): number | undefined {
   if (!trimmed) {
     return undefined;
   }
-  const numeric = Number(trimmed);
+
+  const match = trimmed.match(/\d+/g);
+  if (!match || match.length === 0) {
+    return undefined;
+  }
+
+  const numeric = Number(match[match.length - 1]);
   if (!Number.isFinite(numeric)) {
     return undefined;
   }
+
   const rounded = Math.round(numeric);
   return rounded > 0 ? rounded : undefined;
 }
