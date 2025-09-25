@@ -626,7 +626,10 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (typeof this.athleteId !== 'number') {
       throw new Error('Athlete ID is not loaded');
     }
-    const url = new URL(`/athlete/${this.athleteId}/events`, ICU_BASE_URL);
+    const url = new URL(
+      normaliseApiPath(`athlete/${this.athleteId}/events`),
+      ICU_BASE_URL,
+    );
     url.searchParams.set('start', startISO);
     url.searchParams.set('end', endISO);
     url.searchParams.set('category', 'WORKOUT');
