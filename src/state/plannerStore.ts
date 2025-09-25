@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createFakeProvider } from '../adapters/fake.js';
+import { createIntervalsProvider } from '../adapters/intervals.js';
 import { buildWindows } from '../calc/prescribe.js';
 import { allocateWeeklyDeficits } from '../calc/weekly.js';
 import { sampleProfile } from '../samples/profile.js';
@@ -10,15 +11,33 @@ import type {
   WindowPlan,
   WeeklyPlan,
 } from '../types.js';
-import { loadStoredOverrides, persistOverrides } from './storage.js';
+import {
+  loadCachedWorkouts,
+  loadIntervalsSettings,
+  loadStoredOverrides,
+  persistCachedWorkouts,
+  persistIntervalsSettings,
+  persistOverrides,
+  type StoredIntervalsSettings,
+} from './storage.js';
 import type { PlannerOverrides, PlannerPage, PlannerStatus } from './types.js';
 
-const DEFAULT_START_ISO = '2024-06-10T00:00:00.000Z';
-const DEFAULT_END_ISO = '2024-06-20T00:00:00.000Z';
+const SAMPLE_START_ISO = '2024-06-10T00:00:00.000Z';
+const SAMPLE_END_ISO = '2024-06-20T00:00:00.000Z';
+const DEFAULT_RANGE_DAYS = 10;
+
+interface IntervalsConnectionSettings {
+  apiKey: string;
+  startDateISO: string;
+  rangeDays: number;
+}
+
+type PlannerDataSource = 'sample' | 'intervals';
 
 interface PlannerState {
   status: PlannerStatus;
   error?: string;
+  syncError?: string;
   page: PlannerPage;
   baseProfile: Profile;
   profile: Profile;
@@ -26,11 +45,20 @@ interface PlannerState {
   workouts: PlannedWorkout[];
   windows: WindowPlan[];
   weekly: WeeklyPlan[];
+  connection: IntervalsConnectionSettings;
+  dataSource: PlannerDataSource;
+  lastSyncISO?: string;
+  isRefreshing: boolean;
   init(): Promise<void>;
   setPage(page: PlannerPage): void;
   updateOverride<K extends keyof PlannerOverrides>(key: K, value: PlannerOverrides[K]): void;
   updateCarbBand(type: SessionType, index: 0 | 1, value: number): void;
   updateCarbSplit(part: 'pre' | 'during' | 'post', value: number): void;
+  updateConnectionSetting<K extends keyof IntervalsConnectionSettings>(
+    key: K,
+    value: IntervalsConnectionSettings[K],
+  ): void;
+  refreshWorkouts(): Promise<void>;
 }
 
 function cloneCarbBands(bands: Profile['carbBands']): Profile['carbBands'] {
@@ -118,9 +146,60 @@ function recomputePlan(
   return { profile, windows: adjusted, weekly };
 }
 
+function clampRangeDays(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_RANGE_DAYS;
+  }
+  return Math.min(14, Math.max(7, Math.round(value)));
+}
+
+function createDefaultConnection(): IntervalsConnectionSettings {
+  return {
+    apiKey: '',
+    startDateISO: SAMPLE_START_ISO.slice(0, 10),
+    rangeDays: DEFAULT_RANGE_DAYS,
+  };
+}
+
+function mergeConnectionSettings(
+  base: IntervalsConnectionSettings,
+  stored?: StoredIntervalsSettings,
+): IntervalsConnectionSettings {
+  if (!stored) {
+    return base;
+  }
+
+  const merged: IntervalsConnectionSettings = { ...base };
+  if (typeof stored.apiKey === 'string') {
+    merged.apiKey = stored.apiKey;
+  }
+  if (typeof stored.startDateISO === 'string' && stored.startDateISO.length >= 4) {
+    merged.startDateISO = stored.startDateISO;
+  }
+  if (typeof stored.rangeDays === 'number') {
+    merged.rangeDays = clampRangeDays(stored.rangeDays);
+  }
+  return merged;
+}
+
+function computeIntervalsRange(settings: IntervalsConnectionSettings): {
+  startISO: string;
+  endISO: string;
+} {
+  const parsed = new Date(`${settings.startDateISO}T00:00:00Z`);
+  const startDate = Number.isNaN(parsed.getTime()) ? new Date(SAMPLE_START_ISO) : parsed;
+  const endDate = new Date(startDate.getTime() + settings.rangeDays * 24 * 60 * 60 * 1000);
+  return { startISO: startDate.toISOString(), endISO: endDate.toISOString() };
+}
+
+function shouldResetLastSync(key: keyof IntervalsConnectionSettings): boolean {
+  return key === 'rangeDays' || key === 'startDateISO';
+}
+
 export const usePlannerStore = create<PlannerState>((set, get) => {
   const baseProfile = { ...sampleProfile, carbBands: cloneCarbBands(sampleProfile.carbBands) };
   const defaultOverrides = createDefaultOverrides(baseProfile);
+  const defaultConnection = createDefaultConnection();
 
   return {
     status: 'idle',
@@ -131,18 +210,60 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     workouts: [],
     windows: [],
     weekly: [],
+    connection: defaultConnection,
+    dataSource: 'sample',
+    lastSyncISO: undefined,
+    isRefreshing: false,
+    error: undefined,
+    syncError: undefined,
     async init() {
       if (get().status !== 'idle') {
         return;
       }
 
-      set({ status: 'loading' });
+      set({ status: 'loading', error: undefined });
 
       try {
-        const stored = await loadStoredOverrides();
-        const overrides = mergeOverrides(defaultOverrides, stored);
-        const provider = createFakeProvider();
-        const workouts = await provider.getPlannedWorkouts(DEFAULT_START_ISO, DEFAULT_END_ISO);
+        const [storedOverrides, storedConnection] = await Promise.all([
+          loadStoredOverrides(),
+          loadIntervalsSettings(),
+        ]);
+
+        const overrides = mergeOverrides(defaultOverrides, storedOverrides);
+        const connection = mergeConnectionSettings(defaultConnection, storedConnection);
+        const { startISO, endISO } = computeIntervalsRange(connection);
+
+        let workouts: PlannedWorkout[] = [];
+        let dataSource: PlannerDataSource = 'sample';
+        let lastSyncISO: string | undefined;
+        let syncError: string | undefined;
+
+        if (connection.apiKey) {
+          const cached = await loadCachedWorkouts(startISO, endISO);
+          if (cached) {
+            workouts = cached.workouts;
+            lastSyncISO = cached.fetchedISO;
+            dataSource = 'intervals';
+          } else {
+            try {
+              const provider = createIntervalsProvider(connection.apiKey.trim());
+              workouts = await provider.getPlannedWorkouts(startISO, endISO);
+              dataSource = 'intervals';
+              lastSyncISO = new Date().toISOString();
+              await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+            } catch (error) {
+              syncError = error instanceof Error ? error.message : 'Failed to sync Intervals.icu workouts';
+            }
+          }
+        }
+
+        if (workouts.length === 0) {
+          const provider = createFakeProvider();
+          workouts = await provider.getPlannedWorkouts(SAMPLE_START_ISO, SAMPLE_END_ISO);
+          dataSource = 'sample';
+          lastSyncISO = undefined;
+        }
+
         const { profile, windows, weekly } = recomputePlan(baseProfile, overrides, workouts);
         set({
           status: 'ready',
@@ -151,6 +272,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           profile,
           windows,
           weekly,
+          connection,
+          dataSource,
+          lastSyncISO,
+          syncError,
+          error: undefined,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error loading plan';
@@ -193,5 +319,76 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       set({ overrides, profile, windows, weekly });
       void persistOverrides(overrides);
     },
+    updateConnectionSetting(key, value) {
+      const state = get();
+      const updated: IntervalsConnectionSettings = { ...state.connection };
+      if (key === 'apiKey') {
+        updated.apiKey = String(value ?? '');
+      } else if (key === 'startDateISO') {
+        updated.startDateISO = String(value ?? '');
+      } else if (key === 'rangeDays') {
+        const numeric = typeof value === 'number' ? value : Number(value);
+        updated.rangeDays = clampRangeDays(numeric);
+      }
+      const nextState: Partial<PlannerState> = {
+        connection: updated,
+      };
+      if (shouldResetLastSync(key)) {
+        nextState.lastSyncISO = undefined;
+      }
+      if (key === 'apiKey') {
+        nextState.syncError = undefined;
+      }
+      set(nextState);
+      void persistIntervalsSettings(updated);
+    },
+    async refreshWorkouts() {
+      const state = get();
+      const { connection, overrides } = state;
+      const { startISO, endISO } = computeIntervalsRange(connection);
+      set({ isRefreshing: true, syncError: undefined });
+
+      try {
+        let workouts: PlannedWorkout[];
+        let dataSource: PlannerDataSource;
+        let lastSyncISO: string | undefined;
+
+        if (connection.apiKey) {
+          const provider = createIntervalsProvider(connection.apiKey.trim());
+          workouts = await provider.getPlannedWorkouts(startISO, endISO);
+          dataSource = 'intervals';
+          lastSyncISO = new Date().toISOString();
+          await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+        } else {
+          const provider = createFakeProvider();
+          workouts = await provider.getPlannedWorkouts(SAMPLE_START_ISO, SAMPLE_END_ISO);
+          dataSource = 'sample';
+          lastSyncISO = undefined;
+        }
+
+        const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, workouts);
+        set({
+          workouts,
+          profile,
+          windows,
+          weekly,
+          dataSource,
+          lastSyncISO,
+          status: 'ready',
+          error: undefined,
+          syncError: undefined,
+          isRefreshing: false,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to refresh workouts';
+        const hasExisting = get().workouts.length > 0;
+        if (hasExisting) {
+          set({ isRefreshing: false, syncError: message });
+        } else {
+          set({ isRefreshing: false, status: 'error', error: message, syncError: message });
+        }
+      }
+    },
   };
 });
+
