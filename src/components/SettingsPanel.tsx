@@ -75,6 +75,23 @@ export function SettingsPanel() {
           />
           <p className="text-[0.65rem] text-slate-500">Stored locally in your browser via IndexedDB.</p>
         </div>
+        <div className="space-y-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Athlete ID <span className="text-[0.6rem] lowercase text-slate-500">(optional)</span>
+          </label>
+          <input
+            className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-100"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="e.g. 123456"
+            value={connection.athleteId}
+            onChange={(event) => updateConnectionSetting('athleteId', event.target.value)}
+          />
+          <p className="text-[0.65rem] text-slate-500">
+            Required if Intervals.icu returns a 405 error. Use the number from your Intervals.icu URL.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="space-y-2 text-xs uppercase tracking-wide text-slate-400">
             <span>Start date</span>

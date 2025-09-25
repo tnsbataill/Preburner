@@ -553,9 +553,19 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
 
   private athleteFtp?: number;
 
-  constructor(apiKey: string, debug?: IntervalsDebugLogger) {
+  constructor(
+    apiKey: string,
+    debug?: IntervalsDebugLogger,
+    options?: { athleteId?: number },
+  ) {
     this.apiKey = apiKey;
     this.debug = debug;
+    if (options?.athleteId && Number.isFinite(options.athleteId)) {
+      const rounded = Math.round(options.athleteId);
+      if (rounded > 0) {
+        this.athleteId = rounded;
+      }
+    }
   }
 
   private log(level: IntervalsDebugLevel, message: string, detail?: string): void {
@@ -602,24 +612,58 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     return responseType === 'json' ? response.json() : response.text();
   }
 
-  private async ensureAthlete(): Promise<void> {
-    if (typeof this.athleteId === 'number') {
-      return;
-    }
-    this.log('info', 'Loading Intervals.icu athlete profile');
-    const athlete = (await this.fetchFromApi('/athlete')) as IntervalsAthleteResponse;
+  private async loadAthleteProfile(path: string): Promise<void> {
+    const athlete = (await this.fetchFromApi(path)) as IntervalsAthleteResponse;
     if (!athlete || typeof athlete.id !== 'number') {
       throw new Error('Unable to load Intervals.icu athlete profile');
     }
     this.athleteId = athlete.id;
-    if (typeof athlete.ftp === 'number') {
-      this.athleteFtp = athlete.ftp;
+    this.athleteFtp = typeof athlete.ftp === 'number' ? athlete.ftp : undefined;
+  }
+
+  private logLoadedAthlete(): void {
+    if (typeof this.athleteId !== 'number') {
+      return;
     }
     this.log(
       'info',
       `Loaded athlete profile ${this.athleteId}`,
       typeof this.athleteFtp === 'number' ? `FTP ${this.athleteFtp}` : undefined,
     );
+  }
+
+  private async ensureAthlete(): Promise<void> {
+    if (typeof this.athleteId === 'number' && typeof this.athleteFtp === 'number') {
+      return;
+    }
+
+    if (typeof this.athleteId === 'number') {
+      try {
+        this.log('info', `Refreshing athlete profile ${this.athleteId}`);
+        await this.loadAthleteProfile(`/athlete/${this.athleteId}`);
+        this.logLoadedAthlete();
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : undefined;
+        this.log('warn', `Unable to refresh athlete profile ${this.athleteId}`, detail);
+      }
+      return;
+    }
+
+    this.log('info', 'Loading Intervals.icu athlete profile');
+    try {
+      await this.loadAthleteProfile('/athlete');
+      this.logLoadedAthlete();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : undefined;
+      if (error instanceof Error && /\b405\b/.test(error.message)) {
+        const guidance =
+          'Intervals.icu rejected the automatic athlete lookup (405). Enter your athlete ID in Settings.';
+        this.log('error', guidance, detail);
+        throw new Error(`${guidance} (Original error: ${error.message})`);
+      }
+      this.log('error', 'Unable to load Intervals.icu athlete profile', detail);
+      throw error;
+    }
   }
 
   private buildEventsUrl(startISO: string, endISO: string): string {
@@ -709,10 +753,15 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   }
 }
 
+export interface IntervalsProviderOptions {
+  athleteId?: number;
+}
+
 export function createIntervalsProvider(
   apiKey: string,
   debug?: IntervalsDebugLogger,
+  options?: IntervalsProviderOptions,
 ): IntervalsProvider {
-  return new IntervalsProvider(apiKey, debug);
+  return new IntervalsProvider(apiKey, debug, options);
 }
 

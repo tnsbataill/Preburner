@@ -11,6 +11,7 @@ interface IntervalsSettingsRecord {
   apiKey: string;
   startDateISO: string;
   rangeDays: number;
+  athleteId?: string;
 }
 
 interface WorkoutCacheRecord {
@@ -25,6 +26,7 @@ export interface StoredIntervalsSettings {
   apiKey: string;
   startDateISO: string;
   rangeDays: number;
+  athleteId?: string;
 }
 
 export interface StoredWorkoutCache {
@@ -96,6 +98,7 @@ export async function loadIntervalsSettings(): Promise<StoredIntervalsSettings |
     apiKey: record.apiKey,
     startDateISO: record.startDateISO,
     rangeDays: record.rangeDays,
+    athleteId: record.athleteId,
   };
 }
 
