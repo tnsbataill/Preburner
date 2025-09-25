@@ -1,0 +1,19 @@
+<workout_file>
+  <author>Sample Generator</author>
+  <name>Tempo With Sweet Spot Finish</name>
+  <description>90min build with tempo work and a short sweet spot finish.</description>
+  <sportType>bike</sportType>
+  <tags>
+    <tag name="Tempo"/>
+  </tags>
+  <workout>
+    <!-- Warmup: 10min ramp 50% → 75% FTP -->
+    <Warmup Duration="600" PowerLow="0.50" PowerHigh="0.75"/>
+    <!-- Tempo block: 3x12min at 85-88% FTP with 3min recoveries -->
+    <IntervalsT Repeat="3" OnDuration="720" OffDuration="180" OnPowerLow="0.85" OnPowerHigh="0.88" OffPower="0.55"/>
+    <!-- Sweet spot finish: 8min at 92% FTP -->
+    <SteadyState Duration="480" Power="0.92"/>
+    <!-- Cooldown: 5min ramp 65% → 50% FTP -->
+    <Cooldown Duration="300" PowerLow="0.65" PowerHigh="0.50"/>
+  </workout>
+</workout_file>

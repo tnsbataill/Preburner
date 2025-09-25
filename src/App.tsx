@@ -127,7 +127,7 @@ export default function App() {
                     {formatDate(window.windowStartISO)} → {formatDate(window.windowEndISO)}
                   </p>
                 </header>
-                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
                   <div>
                     <dt className="text-sky-300/70">Need</dt>
                     <dd className="font-mono text-sky-100">{formatNumber(window.need_kcal)} kcal</dd>
@@ -145,6 +145,14 @@ export default function App() {
                     <dd className="text-sky-100">
                       {formatNumber(window.carbs.g_per_hr, 1)} g/hr · pre {formatNumber(window.carbs.pre_g, 1)} g ·
                       during {formatNumber(window.carbs.during_g, 1)} g
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sky-300/70">Macros</dt>
+                    <dd className="text-sky-100">
+                      P {formatNumber(window.macros.protein_g, 1)} g · F {formatNumber(window.macros.fat_g, 1)} g · C
+                      {" "}
+                      {formatNumber(window.macros.carb_g, 1)} g
                     </dd>
                   </div>
                 </dl>
@@ -195,6 +203,13 @@ export default function App() {
                       </dd>
                     </div>
                   ) : null}
+                  <div className="sm:col-span-2">
+                    <dt className="text-fuchsia-300/70">Macro totals</dt>
+                    <dd className="text-fuchsia-100">
+                      P {formatNumber(week.macros.protein_g, 1)} g · F {formatNumber(week.macros.fat_g, 1)} g · C{' '}
+                      {formatNumber(week.macros.carb_g, 1)} g
+                    </dd>
+                  </div>
                 </dl>
               </article>
             ))}

@@ -1,4 +1,11 @@
-import { CarbPlan, PlannedWorkout, Profile, SessionType, WindowPlan } from '../types';
+import {
+  CarbPlan,
+  MacroTargets,
+  PlannedWorkout,
+  Profile,
+  SessionType,
+  WindowPlan,
+} from '../types';
 import { CarbComputationResult, computeCarbPlan } from './carb';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
@@ -39,6 +46,35 @@ function round(value: number, digits = 2): number {
 
 export function isHardSession(type: SessionType): boolean {
   return HARD_SESSION_TYPES.includes(type);
+}
+
+export function computeMacroTargets(profile: Profile, targetKcal: number): MacroTargets {
+  const proteinDefault = profile.protein_g_per_kg * profile.weight_kg;
+  let protein_g = proteinDefault;
+  let remainingKcal = Math.max(0, targetKcal - protein_g * 4);
+
+  if (remainingKcal === 0 && protein_g * 4 > targetKcal) {
+    protein_g = targetKcal / 4;
+    remainingKcal = 0;
+  }
+
+  const fatDefault = profile.fat_g_per_kg_min * profile.weight_kg;
+  let fat_g = fatDefault;
+  const fatKcal = fat_g * 9;
+  if (fatKcal > remainingKcal) {
+    fat_g = remainingKcal / 9;
+    remainingKcal = 0;
+  } else {
+    remainingKcal -= fatKcal;
+  }
+
+  const carb_g = remainingKcal > 0 ? remainingKcal / 4 : 0;
+
+  return {
+    protein_g: round(Math.max(0, protein_g), 1),
+    fat_g: round(Math.max(0, fat_g), 1),
+    carb_g: round(Math.max(0, carb_g), 1),
+  };
 }
 
 export function estimateWorkoutKilojoules(workout: PlannedWorkout): number {
@@ -120,16 +156,20 @@ export function buildWindows(profile: Profile, workouts: PlannedWorkout[]): Wind
       notes.push('Over-fuel guard applied');
     }
 
+    const targetKcal = round(needKcal);
+    const macroTargets = computeMacroTargets(profile, targetKcal);
+
     windows.push({
       windowStartISO: windowStart,
       windowEndISO: windowEnd,
       prevWorkoutId: prev ? prev.id : 'START',
       nextWorkoutId: next.id,
       nextWorkoutType: next.type,
-      need_kcal: round(needKcal),
-      target_kcal: round(needKcal),
+      need_kcal: targetKcal,
+      target_kcal: targetKcal,
       activityFactorApplied: round(activityFactor, 2),
       carbs: mapCarbPlan(carbPlan),
+      macros: macroTargets,
       notes,
     });
   }

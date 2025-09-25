@@ -82,4 +82,30 @@ describe('prescription engine', () => {
     const totalCarbs = plan.pre_g + plan.during_g + plan.post_g;
     expect(totalCarbs).toBeGreaterThan(0);
   });
+
+  it('derives macro targets per window and aggregates them weekly', () => {
+    const baseWindows = buildWindows(sampleProfile, plannedWorkouts);
+    const easyWindow = baseWindows.find((window) => window.nextWorkoutType === 'Endurance');
+    expect(easyWindow).toBeDefined();
+    const expectedProtein = sampleProfile.protein_g_per_kg * sampleProfile.weight_kg;
+    const expectedFat = sampleProfile.fat_g_per_kg_min * sampleProfile.weight_kg;
+    expect(easyWindow?.macros.protein_g).toBeCloseTo(expectedProtein, 1);
+    expect(easyWindow?.macros.fat_g).toBeCloseTo(expectedFat, 1);
+
+    const { windows: allocated, weekly } = allocateWeeklyDeficits(sampleProfile, baseWindows, plannedWorkouts);
+    const allocatedEasy = allocated.find((window) => window.nextWorkoutType === 'Endurance');
+    expect(allocatedEasy).toBeDefined();
+    expect(allocatedEasy?.macros.protein_g).toBeCloseTo(expectedProtein, 1);
+    expect(allocatedEasy?.macros.fat_g).toBeCloseTo(expectedFat, 1);
+    expect(allocatedEasy?.macros.carb_g ?? Infinity).toBeLessThan(easyWindow?.macros.carb_g ?? 0);
+
+    const weeklyTotals = weekly[0];
+    expect(weeklyTotals).toBeDefined();
+    const summedCarbs = allocated.reduce((sum, window) => sum + window.macros.carb_g, 0);
+    const summedProtein = allocated.reduce((sum, window) => sum + window.macros.protein_g, 0);
+    const summedFat = allocated.reduce((sum, window) => sum + window.macros.fat_g, 0);
+    expect(weeklyTotals?.macros.carb_g).toBeCloseTo(summedCarbs, 0);
+    expect(weeklyTotals?.macros.protein_g).toBeCloseTo(summedProtein, 0);
+    expect(weeklyTotals?.macros.fat_g).toBeCloseTo(summedFat, 0);
+  });
 });

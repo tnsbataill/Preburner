@@ -54,6 +54,12 @@ export interface CarbPlan {
   gluFruRatio: number;
 }
 
+export interface MacroTargets {
+  protein_g: number;
+  fat_g: number;
+  carb_g: number;
+}
+
 export interface WindowPlan {
   windowStartISO: string;
   windowEndISO: string;
@@ -64,6 +70,7 @@ export interface WindowPlan {
   target_kcal: number;
   activityFactorApplied: number;
   carbs: CarbPlan;
+  macros: MacroTargets;
   notes: string[];
 }
 
@@ -74,6 +81,7 @@ export interface WeeklyPlan {
   weeklyTargetDeficit_kcal: number;
   weeklyAllocated_kcal: number;
   carryOver_kcal?: number;
+  macros: MacroTargets;
 }
 
 export interface WeightEntry {

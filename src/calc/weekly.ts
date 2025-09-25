@@ -1,12 +1,18 @@
 import { PlannedWorkout, Profile, SessionType, WeeklyPlan, WindowPlan } from '../types';
-import { isHardSession } from './prescribe';
+import { computeMacroTargets, isHardSession } from './prescribe';
 
 function cloneWindow(window: WindowPlan): WindowPlan {
   return {
     ...window,
     carbs: { ...window.carbs },
+    macros: { ...window.macros },
     notes: [...window.notes],
   };
+}
+
+function round(value: number, digits = 1) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
 }
 
 function getIsoWeekInfo(dateISO: string) {
@@ -49,7 +55,11 @@ export function allocateWeeklyDeficits(
   }
 
   const workoutMap = new Map(workouts.map((workout) => [workout.id, workout]));
-  const clonedWindows = windows.map(cloneWindow);
+  const clonedWindows = windows.map((window) => {
+    const cloned = cloneWindow(window);
+    cloned.macros = computeMacroTargets(profile, cloned.target_kcal);
+    return cloned;
+  });
   const grouped = new Map<string, WindowPlan[]>();
 
   for (const window of clonedWindows) {
@@ -70,6 +80,8 @@ export function allocateWeeklyDeficits(
     const weeklyTarget = Math.abs(profile.targetKgPerWeek) * profile.kcalPerKg;
     let remainingDeficit = weeklyTarget;
 
+    const macroAccumulator = { protein_g: 0, fat_g: 0, carb_g: 0 };
+
     for (const window of weekWindows) {
       const nextWorkout = workoutMap.get(window.nextWorkoutId);
       const nextType: SessionType | undefined = nextWorkout?.type ?? window.nextWorkoutType;
@@ -88,6 +100,10 @@ export function allocateWeeklyDeficits(
         window.target_kcal = Math.max(0, window.need_kcal - deficit);
         window.notes.push(`Deficit applied: ${Math.round(deficit)}`);
       }
+      window.macros = computeMacroTargets(profile, window.target_kcal);
+      macroAccumulator.protein_g += window.macros.protein_g;
+      macroAccumulator.fat_g += window.macros.fat_g;
+      macroAccumulator.carb_g += window.macros.carb_g;
       remainingDeficit -= deficit;
     }
 
@@ -99,6 +115,11 @@ export function allocateWeeklyDeficits(
       weeklyTargetDeficit_kcal: Math.round(weeklyTarget),
       weeklyAllocated_kcal: Math.round(allocated),
       carryOver_kcal: remainingDeficit > 0 ? Math.round(remainingDeficit) : undefined,
+      macros: {
+        protein_g: round(macroAccumulator.protein_g),
+        fat_g: round(macroAccumulator.fat_g),
+        carb_g: round(macroAccumulator.carb_g),
+      },
     });
   }
 
