@@ -1,0 +1,17 @@
+<workout_file>
+  <author>Sample Generator</author>
+  <name>Endurance 60min</name>
+  <description>Simple 60min endurance ride at 65% FTP.</description>
+  <sportType>bike</sportType>
+  <tags>
+    <tag name="Endurance"/>
+  </tags>
+  <workout>
+    <!-- Warmup: 5min ramp 50% → 65% FTP -->
+    <Warmup Duration="300" PowerLow="0.50" PowerHigh="0.65"/>
+    <!-- Main block: 50min steady 65% FTP -->
+    <SteadyState Duration="3000" Power="0.65"/>
+    <!-- Cooldown: 5min ramp 65% → 50% FTP -->
+    <Cooldown Duration="300" PowerLow="0.65" PowerHigh="0.50"/>
+  </workout>
+</workout_file>
