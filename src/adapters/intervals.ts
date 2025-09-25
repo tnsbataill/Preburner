@@ -1,7 +1,7 @@
 import type { PlannedWorkout, SessionType, Step } from '../types.js';
 import type { PlannedWorkoutProvider } from './provider.js';
 
-const ICU_BASE_URL = 'https://intervals.icu/api/v1';
+const ICU_BASE_URL = 'https://intervals.icu/api/v1/';
 
 interface IntervalsAthleteResponse {
   id: number;
@@ -500,7 +500,10 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   }
 
   private async fetchFromApi(path: string, responseType: 'json' | 'text' = 'json'): Promise<any> {
-    const url = new URL(path, ICU_BASE_URL);
+    const resolvedPath = path.startsWith('http')
+      ? path
+      : `${ICU_BASE_URL}${path.startsWith('/') ? path.slice(1) : path}`;
+    const url = new URL(resolvedPath);
     const response = await fetch(url.toString(), {
       headers: {
         Authorization: encodeBasicAuth(this.apiKey),
