@@ -191,6 +191,21 @@ function buildEndISO(startISO: string | undefined, seconds: number | undefined, 
   return new Date(endMs).toISOString();
 }
 
+function extractDateParam(iso?: string): string | undefined {
+  if (!iso) {
+    return undefined;
+  }
+  const match = /^\d{4}-\d{2}-\d{2}/.exec(iso);
+  if (match) {
+    return match[0];
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  return parsed.toISOString().slice(0, 10);
+}
+
 function mapTagsToDefaultType(tags: string[], fallback: SessionType): SessionType {
   const lowered = tags.map((tag) => tag.toLowerCase());
   if (lowered.includes('vo2') || lowered.includes('vo₂')) {
@@ -522,19 +537,20 @@ async function fetchStructuredFile(
     return parsedSteps;
   }
 
-  const fileId =
+  const hasDownloadableFile = Boolean(
     detail.structured_workout_id ??
-    detail.structuredWorkoutId ??
-    detail.workout_file_id ??
-    detail.workoutFileId ??
-    detail.workout_file?.id ??
-    detail.files?.find((file) => file.ext === 'zwo' || file.type === 'structured')?.id;
-  if (!fileId) {
+      detail.structuredWorkoutId ??
+      detail.workout_file_id ??
+      detail.workoutFileId ??
+      detail.workout_file?.id ??
+      detail.files?.find((file) => file.ext === 'zwo' || file.type === 'structured'),
+  );
+  if (!hasDownloadableFile) {
     return undefined;
   }
 
   const response = await fetcher(
-    `/athlete/${athleteId}/files/${fileId}?ext=zwo&resolve=true`,
+    `/athlete/${athleteId}/events/${event.id}/download.zwo?resolve=true`,
     'text',
   );
   if (typeof response === 'string') {
@@ -692,11 +708,17 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       throw new Error('Athlete ID is not loaded');
     }
     const url = new URL(
-      normaliseApiPath(`athlete/${this.athleteId}/events`),
+      normaliseApiPath(`athlete/${this.athleteId}/events.json`),
       ICU_BASE_URL,
     );
-    url.searchParams.set('start', startISO);
-    url.searchParams.set('end', endISO);
+    const oldest = extractDateParam(startISO);
+    const newest = extractDateParam(endISO);
+    if (oldest) {
+      url.searchParams.set('oldest', oldest);
+    }
+    if (newest) {
+      url.searchParams.set('newest', newest);
+    }
     url.searchParams.set('category', 'WORKOUT');
     return url.pathname + url.search;
   }
