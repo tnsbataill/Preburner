@@ -1,0 +1,26 @@
+<workout_file>
+  <author>Sample Generator</author>
+  <name>VO2max 5x3min</name>
+  <description>5x3min VO2max intervals at 120% FTP with 3min recoveries.</description>
+  <sportType>bike</sportType>
+  <tags>
+    <tag name="VO2"/>
+  </tags>
+  <workout>
+    <!-- Warmup: 10min ramp 50% → 75% FTP -->
+    <Warmup Duration="600" PowerLow="0.50" PowerHigh="0.75"/>
+    <!-- 5x (3min at 120% FTP, 3min at 55% FTP) -->
+    <SteadyState Duration="180" Power="1.20"/>
+    <SteadyState Duration="180" Power="0.55"/>
+    <SteadyState Duration="180" Power="1.20"/>
+    <SteadyState Duration="180" Power="0.55"/>
+    <SteadyState Duration="180" Power="1.20"/>
+    <SteadyState Duration="180" Power="0.55"/>
+    <SteadyState Duration="180" Power="1.20"/>
+    <SteadyState Duration="180" Power="0.55"/>
+    <SteadyState Duration="180" Power="1.20"/>
+    <SteadyState Duration="180" Power="0.55"/>
+    <!-- Cooldown: 5min ramp 60% → 40% FTP -->
+    <Cooldown Duration="300" PowerLow="0.60" PowerHigh="0.40"/>
+  </workout>
+</workout_file>
