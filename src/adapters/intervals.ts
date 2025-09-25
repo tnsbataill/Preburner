@@ -1,7 +1,18 @@
 import type { PlannedWorkout, SessionType, Step } from '../types.js';
 import type { PlannedWorkoutProvider } from './provider.js';
 
-const ICU_BASE_URL = 'https://intervals.icu/api/v1';
+const ICU_BASE_URL = 'https://intervals.icu/api/v1/';
+const ICU_API_PREFIX = 'api/v1/';
+
+export type IntervalsDebugLevel = 'info' | 'warn' | 'error';
+
+export interface IntervalsDebugEntry {
+  level?: IntervalsDebugLevel;
+  message: string;
+  detail?: string;
+}
+
+type IntervalsDebugLogger = (entry: IntervalsDebugEntry) => void;
 
 interface IntervalsAthleteResponse {
   id: number;
@@ -198,6 +209,51 @@ function mapTagsToDefaultType(tags: string[], fallback: SessionType): SessionTyp
     return 'Rest';
   }
   return fallback;
+}
+
+function truncate(value: string, limit = 200): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit - 1)}…`;
+}
+
+function summariseErrorBody(body: string): string | undefined {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === 'string') {
+      return truncate(parsed);
+    }
+    if (parsed && typeof parsed === 'object') {
+      const candidates = ['message', 'error', 'detail', 'title'] as const;
+      for (const key of candidates) {
+        const value = (parsed as Record<string, unknown>)[key];
+        if (typeof value === 'string' && value.trim()) {
+          return truncate(value.trim());
+        }
+      }
+      return truncate(JSON.stringify(parsed));
+    }
+  } catch (error) {
+    // fall through to returning the raw trimmed body
+  }
+  return truncate(trimmed);
+}
+
+function normaliseApiPath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
+  if (withoutLeadingSlash.startsWith(ICU_API_PREFIX)) {
+    return withoutLeadingSlash.slice(ICU_API_PREFIX.length);
+  }
+  return withoutLeadingSlash;
 }
 
 function estimateFromIf(
@@ -491,27 +547,57 @@ async function fetchStructuredFile(
 export class IntervalsProvider implements PlannedWorkoutProvider {
   private readonly apiKey: string;
 
+  private readonly debug?: IntervalsDebugLogger;
+
   private athleteId?: number;
 
   private athleteFtp?: number;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, debug?: IntervalsDebugLogger) {
     this.apiKey = apiKey;
+    this.debug = debug;
+  }
+
+  private log(level: IntervalsDebugLevel, message: string, detail?: string): void {
+    if (this.debug) {
+      this.debug({ level, message, detail });
+    }
   }
 
   private async fetchFromApi(path: string, responseType: 'json' | 'text' = 'json'): Promise<any> {
-    const url = new URL(path, ICU_BASE_URL);
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: encodeBasicAuth(this.apiKey),
-        Accept: responseType === 'json' ? 'application/json' : 'text/plain',
-      },
-    });
+    const url = path.startsWith('http')
+      ? new URL(path)
+      : new URL(normaliseApiPath(path), ICU_BASE_URL);
+    const summaryPath = `${url.pathname}${url.search}`;
+
+    this.log('info', `GET ${summaryPath}`, 'Sending request to Intervals.icu');
+
+    let response: Response;
+    try {
+      response = await fetch(url.toString(), {
+        headers: {
+          Authorization: encodeBasicAuth(this.apiKey),
+          Accept: responseType === 'json' ? 'application/json' : 'text/plain',
+        },
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Network error';
+      this.log('error', `Network error while requesting ${summaryPath}`, detail);
+      throw error;
+    }
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Intervals.icu request failed (${response.status}): ${body}`);
+      const detail = summariseErrorBody(body);
+      const statusText = response.statusText ? ` ${response.statusText}` : '';
+      const suffix = detail ? `: ${detail}` : '';
+      this.log('error', `Intervals.icu responded ${response.status}${statusText} for GET ${summaryPath}`, detail);
+      throw new Error(
+        `Intervals.icu request failed (${response.status}${statusText}) for GET ${summaryPath}${suffix}`,
+      );
     }
+
+    this.log('info', `GET ${summaryPath} → ${response.status}`, response.statusText || undefined);
 
     return responseType === 'json' ? response.json() : response.text();
   }
@@ -520,6 +606,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (typeof this.athleteId === 'number') {
       return;
     }
+    this.log('info', 'Loading Intervals.icu athlete profile');
     const athlete = (await this.fetchFromApi('/athlete')) as IntervalsAthleteResponse;
     if (!athlete || typeof athlete.id !== 'number') {
       throw new Error('Unable to load Intervals.icu athlete profile');
@@ -528,6 +615,11 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (typeof athlete.ftp === 'number') {
       this.athleteFtp = athlete.ftp;
     }
+    this.log(
+      'info',
+      `Loaded athlete profile ${this.athleteId}`,
+      typeof this.athleteFtp === 'number' ? `FTP ${this.athleteFtp}` : undefined,
+    );
   }
 
   private buildEventsUrl(startISO: string, endISO: string): string {
@@ -546,14 +638,18 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       return undefined;
     }
     try {
+      this.log('info', `Fetching structured workout for event ${event.id}`);
       return await fetchStructuredFile(this.fetchFromApi.bind(this), this.athleteId, event);
     } catch (error) {
       console.warn('Failed to load structured workout for event', event.id, error);
+      const detail = error instanceof Error ? error.message : undefined;
+      this.log('warn', `Failed to load structured workout for event ${event.id}`, detail);
       return undefined;
     }
   }
 
   async getPlannedWorkouts(startISO: string, endISO: string): Promise<PlannedWorkout[]> {
+    this.log('info', 'Preparing to sync planned workouts', `${startISO} → ${endISO}`);
     await this.ensureAthlete();
     if (typeof this.athleteId !== 'number') {
       return [];
@@ -564,6 +660,8 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (!Array.isArray(events)) {
       return [];
     }
+
+    this.log('info', `Received ${events.length} planned events`);
 
     const workouts: PlannedWorkout[] = [];
 
@@ -600,13 +698,18 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       });
     }
 
-    return workouts.sort(
+    const sorted = workouts.sort(
       (a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime(),
     );
+    this.log('info', `Prepared ${sorted.length} workouts for planner`);
+    return sorted;
   }
 }
 
-export function createIntervalsProvider(apiKey: string): IntervalsProvider {
-  return new IntervalsProvider(apiKey);
+export function createIntervalsProvider(
+  apiKey: string,
+  debug?: IntervalsDebugLogger,
+): IntervalsProvider {
+  return new IntervalsProvider(apiKey, debug);
 }
 

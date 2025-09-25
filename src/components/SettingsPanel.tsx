@@ -23,6 +23,13 @@ export function SettingsPanel() {
   const dataSource = usePlannerStore((state) => state.dataSource);
   const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
   const syncError = usePlannerStore((state) => state.syncError);
+  const syncLog = usePlannerStore((state) => state.syncLog);
+
+  const levelClasses: Record<'info' | 'warn' | 'error', string> = {
+    info: 'text-slate-300',
+    warn: 'text-amber-300',
+    error: 'text-rose-300',
+  };
 
   const rangeSummary = (() => {
     if (!connection.startDateISO) {
@@ -125,6 +132,31 @@ export function SettingsPanel() {
               <p className="mt-2 rounded-md border border-rose-900/50 bg-rose-950/40 p-2 text-rose-200">
                 {syncError}
               </p>
+            ) : null}
+            {syncLog.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                <h4 className="text-[0.6rem] font-semibold uppercase tracking-wide text-slate-500">
+                  Sync log
+                </h4>
+                <ul className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-800/60 bg-slate-950/40 p-2">
+                  {syncLog.map((entry, index) => (
+                    <li
+                      key={`${entry.timestamp}-${index}`}
+                      className="rounded-sm border border-slate-800/40 bg-slate-950/80 p-2"
+                    >
+                      <div className="flex items-baseline justify-between gap-2 text-[0.6rem]">
+                        <span className={`${levelClasses[entry.level]} font-semibold`}>{entry.message}</span>
+                        <time className="text-[0.55rem] text-slate-500">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </time>
+                      </div>
+                      {entry.detail ? (
+                        <p className="mt-1 text-[0.55rem] text-slate-400">{entry.detail}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
         </div>

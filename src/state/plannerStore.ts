@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createFakeProvider } from '../adapters/fake.js';
-import { createIntervalsProvider } from '../adapters/intervals.js';
+import { createIntervalsProvider, type IntervalsDebugEntry } from '../adapters/intervals.js';
 import { buildWindows } from '../calc/prescribe.js';
 import { allocateWeeklyDeficits } from '../calc/weekly.js';
 import { sampleProfile } from '../samples/profile.js';
@@ -34,6 +34,13 @@ interface IntervalsConnectionSettings {
 
 type PlannerDataSource = 'sample' | 'intervals';
 
+interface SyncLogEntry {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  detail?: string;
+}
+
 interface PlannerState {
   status: PlannerStatus;
   error?: string;
@@ -49,6 +56,7 @@ interface PlannerState {
   dataSource: PlannerDataSource;
   lastSyncISO?: string;
   isRefreshing: boolean;
+  syncLog: SyncLogEntry[];
   init(): Promise<void>;
   setPage(page: PlannerPage): void;
   updateOverride<K extends keyof PlannerOverrides>(key: K, value: PlannerOverrides[K]): void;
@@ -201,6 +209,53 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
   const defaultOverrides = createDefaultOverrides(baseProfile);
   const defaultConnection = createDefaultConnection();
 
+  const LOG_LIMIT = 50;
+
+  const pushSyncLog = (
+    level: SyncLogEntry['level'],
+    message: string,
+    detail?: string,
+  ) => {
+    const entry: SyncLogEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      detail,
+    };
+    set((state) => {
+      const next = [...state.syncLog, entry];
+      return {
+        syncLog: next.length > LOG_LIMIT ? next.slice(next.length - LOG_LIMIT) : next,
+      };
+    });
+  };
+
+  const resetSyncLog = (
+    initial?: { level?: SyncLogEntry['level']; message: string; detail?: string },
+  ) => {
+    if (initial) {
+      const entry: SyncLogEntry = {
+        timestamp: new Date().toISOString(),
+        level: initial.level ?? 'info',
+        message: initial.message,
+        detail: initial.detail,
+      };
+      set({ syncLog: [entry] });
+      return;
+    }
+    set({ syncLog: [] });
+  };
+
+  const forwardIntervalsDebug = (entry: IntervalsDebugEntry) => {
+    pushSyncLog(entry.level ?? 'info', entry.message, entry.detail);
+  };
+
+  const formatRangeDetail = (startISO: string, endISO: string) => {
+    const start = new Date(startISO).toLocaleString();
+    const end = new Date(endISO).toLocaleString();
+    return `${start} → ${end}`;
+  };
+
   return {
     status: 'idle',
     page: 'onboarding',
@@ -216,12 +271,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     isRefreshing: false,
     error: undefined,
     syncError: undefined,
+    syncLog: [],
     async init() {
       if (get().status !== 'idle') {
         return;
       }
 
       set({ status: 'loading', error: undefined });
+      resetSyncLog();
 
       try {
         const [storedOverrides, storedConnection] = await Promise.all([
@@ -239,20 +296,30 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         let syncError: string | undefined;
 
         if (connection.apiKey) {
+          pushSyncLog('info', 'Intervals.icu API key detected');
+          pushSyncLog('info', 'Sync window selected', formatRangeDetail(startISO, endISO));
           const cached = await loadCachedWorkouts(startISO, endISO);
           if (cached) {
             workouts = cached.workouts;
             lastSyncISO = cached.fetchedISO;
             dataSource = 'intervals';
+            pushSyncLog(
+              'info',
+              `Loaded ${workouts.length} cached workout${workouts.length === 1 ? '' : 's'}`,
+              cached.fetchedISO ? new Date(cached.fetchedISO).toLocaleString() : undefined,
+            );
           } else {
             try {
-              const provider = createIntervalsProvider(connection.apiKey.trim());
+              pushSyncLog('info', 'Requesting workouts from Intervals.icu');
+              const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug);
               workouts = await provider.getPlannedWorkouts(startISO, endISO);
               dataSource = 'intervals';
               lastSyncISO = new Date().toISOString();
               await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+              pushSyncLog('info', `Synced ${workouts.length} workout${workouts.length === 1 ? '' : 's'}`);
             } catch (error) {
               syncError = error instanceof Error ? error.message : 'Failed to sync Intervals.icu workouts';
+              pushSyncLog('error', syncError);
             }
           }
         }
@@ -262,6 +329,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           workouts = await provider.getPlannedWorkouts(SAMPLE_START_ISO, SAMPLE_END_ISO);
           dataSource = 'sample';
           lastSyncISO = undefined;
+          if (connection.apiKey) {
+            pushSyncLog('warn', 'No workouts returned from Intervals.icu', 'Falling back to sample data.');
+          }
+          pushSyncLog('info', `Loaded ${workouts.length} sample workout${workouts.length === 1 ? '' : 's'}`);
+          if (!connection.apiKey) {
+            pushSyncLog('info', 'Intervals.icu API key not configured', 'Using sample data.');
+          }
         }
 
         const { profile, windows, weekly } = recomputePlan(baseProfile, overrides, workouts);
@@ -281,6 +355,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error loading plan';
         set({ status: 'error', error: message });
+        pushSyncLog('error', message);
       }
     },
     setPage(page) {
@@ -346,6 +421,10 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       const state = get();
       const { connection, overrides } = state;
       const { startISO, endISO } = computeIntervalsRange(connection);
+      resetSyncLog({
+        message: connection.apiKey ? 'Refreshing from Intervals.icu' : 'Loading sample plan',
+        detail: connection.apiKey ? formatRangeDetail(startISO, endISO) : undefined,
+      });
       set({ isRefreshing: true, syncError: undefined });
 
       try {
@@ -354,16 +433,22 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         let lastSyncISO: string | undefined;
 
         if (connection.apiKey) {
-          const provider = createIntervalsProvider(connection.apiKey.trim());
+          const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug);
           workouts = await provider.getPlannedWorkouts(startISO, endISO);
           dataSource = 'intervals';
           lastSyncISO = new Date().toISOString();
           await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+          if (workouts.length === 0) {
+            pushSyncLog('warn', 'Intervals.icu returned zero workouts');
+          }
+          pushSyncLog('info', `Synced ${workouts.length} workout${workouts.length === 1 ? '' : 's'}`);
         } else {
           const provider = createFakeProvider();
           workouts = await provider.getPlannedWorkouts(SAMPLE_START_ISO, SAMPLE_END_ISO);
           dataSource = 'sample';
           lastSyncISO = undefined;
+          pushSyncLog('info', `Loaded ${workouts.length} sample workout${workouts.length === 1 ? '' : 's'}`);
+          pushSyncLog('info', 'Intervals.icu API key not configured', 'Using sample data.');
         }
 
         const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, workouts);
@@ -381,6 +466,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to refresh workouts';
+        pushSyncLog('error', message);
         const hasExisting = get().workouts.length > 0;
         if (hasExisting) {
           set({ isRefreshing: false, syncError: message });
