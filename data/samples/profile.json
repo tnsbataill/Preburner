@@ -1,0 +1,51 @@
+{
+  "ui": {
+    "sex": "F",
+    "age_years": 34,
+    "height_ft": 5,
+    "height_in": 7,
+    "weight_lb": 150,
+    "ftp_watts": 250,
+    "efficiencyPreset": "Competitive",
+    "activityFactorDefault": 1.32,
+    "targetLbPerWeek": -0.77
+  },
+  "internal": {
+    "sex": "F",
+    "age_years": 34,
+    "height_cm": 170.2,
+    "weight_kg": 68.04,
+    "ftp_watts": 250,
+    "efficiencyPreset": "Competitive",
+    "efficiency": 0.23,
+    "activityFactorDefault": 1.32,
+    "activityFactorOverrides": {
+      "2024-06-14": 1.38
+    },
+    "targetKgPerWeek": -0.35,
+    "kcalPerKg": 7700,
+    "deficitCapPerWindow": 600,
+    "windowPctCap": 0.3,
+    "protein_g_per_kg": 1.7,
+    "fat_g_per_kg_min": 0.6,
+    "carbBands": {
+      "Endurance": [55, 70],
+      "Tempo": [65, 85],
+      "Threshold": [80, 100],
+      "VO2": [90, 110],
+      "Race": [90, 120],
+      "Rest": [0, 0]
+    },
+    "carbSplit": {
+      "pre": 0.2,
+      "during": 0.6,
+      "post": 0.2
+    },
+    "gluFruRatio": 0.8,
+    "useImperial": true
+  },
+  "notes": {
+    "source": "devplan step 0 sample profile",
+    "conversion_explanation": "UI weight of 150 lb converts to 68.04 kg; height 5 ft 7 in converts to 170.2 cm."
+  }
+}
