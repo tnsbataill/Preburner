@@ -3,14 +3,24 @@ import { usePlannerStore } from '../state/plannerStore.js';
 export function OnboardingPage() {
   const profile = usePlannerStore((state) => state.profile);
   const workouts = usePlannerStore((state) => state.workouts);
+  const dataSource = usePlannerStore((state) => state.dataSource);
+  const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
+  const syncError = usePlannerStore((state) => state.syncError);
+
+  const lastSyncLabel = lastSyncISO
+    ? new Date(lastSyncISO).toLocaleString()
+    : dataSource === 'intervals'
+      ? 'Awaiting first sync'
+      : 'Sample data in use';
 
   return (
     <section className="space-y-6">
       <header className="space-y-2">
         <h2 className="text-2xl font-semibold text-slate-100">Welcome to Preburner</h2>
         <p className="text-sm text-slate-400">
-          This guided sandbox loads a sample athlete and upcoming sessions. Adjust the sliders on the left to see how the
-          nutrition engine adapts in real time.
+          Connect your Intervals.icu account or explore the sandbox data. Enter an API key in the settings panel to sync your
+          next week of structured workouts, then adjust the sliders on the left to see how the nutrition engine adapts in real
+          time.
         </p>
       </header>
 
@@ -46,15 +56,27 @@ export function OnboardingPage() {
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-semibold text-slate-200">Sample workouts</h3>
+          <h3 className="text-sm font-semibold text-slate-200">Upcoming workouts</h3>
           <p className="mt-3 text-xs text-slate-400">
-            Loaded from the fake adapter. {workouts.length} sessions are ready for planning this week.
+            {workouts.length} sessions loaded from {dataSource === 'intervals' ? 'Intervals.icu' : 'the built-in sample dataset'}.
           </p>
+          <dl className="mt-3 space-y-1 text-[0.7rem] text-slate-500">
+            <div className="flex justify-between">
+              <dt>Last sync</dt>
+              <dd className="text-slate-300">{lastSyncLabel}</dd>
+            </div>
+          </dl>
+          {syncError ? (
+            <p className="mt-2 rounded-md border border-rose-900/40 bg-rose-950/40 p-2 text-rose-200">
+              Sync issue: {syncError}
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 sm:col-span-2 lg:col-span-1">
           <h3 className="text-sm font-semibold text-slate-200">Next steps</h3>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-slate-400">
+            <li>Press “Refresh from Intervals.icu” once your API key is saved.</li>
             <li>Visit the Planner view to confirm session energy targets.</li>
             <li>Open the Windows view to review fuel windows between workouts.</li>
             <li>Check the Weekly view for deficit placement vs. target.</li>

@@ -14,6 +14,10 @@ function formatDate(iso: string) {
 export function PlannerPage() {
   const workouts = usePlannerStore((state) => state.workouts);
   const profile = usePlannerStore((state) => state.profile);
+  const dataSource = usePlannerStore((state) => state.dataSource);
+  const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
+  const syncError = usePlannerStore((state) => state.syncError);
+  const isRefreshing = usePlannerStore((state) => state.isRefreshing);
 
   const totalPlannedKj = useMemo(
     () =>
@@ -28,18 +32,30 @@ export function PlannerPage() {
       <header className="space-y-1">
         <h2 className="text-2xl font-semibold text-slate-100">Planner</h2>
         <p className="text-sm text-slate-400">
-          Review the upcoming sessions provided by the fake adapter. Planned energy totals drive the fueling windows and
-          macro targets below.
+          Review the upcoming sessions pulled from {dataSource === 'intervals' ? 'Intervals.icu' : 'the sample dataset'}. Planned
+          energy totals drive the fueling windows and macro targets below.
         </p>
+        <p className="text-xs text-slate-500">
+          {dataSource === 'intervals'
+            ? `Last sync: ${lastSyncISO ? new Date(lastSyncISO).toLocaleString() : 'Awaiting first sync'}`
+            : 'Tip: Enter your Intervals.icu API key to replace the sample plan.'}
+        </p>
+        {syncError ? (
+          <p className="text-xs text-rose-300">Sync issue: {syncError}</p>
+        ) : null}
       </header>
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-300">{workouts.length} sessions scheduled.</p>
           <p className="text-xs uppercase tracking-wide text-slate-500">
-            Total planned energy: <span className="font-semibold text-slate-200">{totalPlannedKj.toFixed(0)} kJ</span>
+            Total planned energy:{' '}
+            <span className="font-semibold text-slate-200">{totalPlannedKj.toFixed(0)} kJ</span>
           </p>
         </div>
+        {isRefreshing ? (
+          <p className="mt-2 text-xs text-slate-500">Refreshing workouts…</p>
+        ) : null}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {workouts.map((workout) => (
