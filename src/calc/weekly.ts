@@ -1,5 +1,5 @@
-import { PlannedWorkout, Profile, SessionType, WeeklyPlan, WindowPlan } from '../types';
-import { computeMacroTargets, isHardSession } from './prescribe';
+import type { PlannedWorkout, Profile, SessionType, WeeklyPlan, WindowPlan } from '../types.js';
+import { computeMacroTargets, isHardSession } from './prescribe.js';
 
 function cloneWindow(window: WindowPlan): WindowPlan {
   return {

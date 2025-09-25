@@ -1,8 +1,13 @@
-import { CarbPlan, PlannedWorkout, Profile, SessionType } from '../types';
+import type { PlannedWorkout, Profile, SessionType } from '../types.js';
 
 const HARD_SESSION_TYPES: SessionType[] = ['Threshold', 'VO2', 'Race'];
 
-export interface CarbComputationResult extends CarbPlan {
+export interface CarbComputationResult {
+  g_per_hr: number;
+  pre_g: number;
+  during_g: number;
+  post_g: number;
+  gluFruRatio: number;
   overFuelGuardApplied: boolean;
 }
 
