@@ -1,221 +1,113 @@
-import { useMemo } from 'react';
-import { buildWindows } from './calc/prescribe';
-import { allocateWeeklyDeficits } from './calc/weekly';
-import { plannedWorkouts } from './samples/workouts';
-import { sampleProfile } from './samples/profile';
+import { useEffect, useMemo } from 'react';
+import { SettingsPanel } from './components/SettingsPanel.js';
+import { OnboardingPage } from './pages/OnboardingPage.js';
+import { PlannerPage } from './pages/PlannerPage.js';
+import { WeeklyPage } from './pages/WeeklyPage.js';
+import { WindowsPage } from './pages/WindowsPage.js';
+import { usePlannerStore } from './state/plannerStore.js';
+import type { PlannerPage as PlannerPageKey } from './state/types.js';
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const pageDefinitions: { key: PlannerPageKey; label: string }[] = [
+  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'planner', label: 'Planner' },
+  { key: 'windows', label: 'Windows' },
+  { key: 'weekly', label: 'Weekly' },
+];
+
+function usePlannerInitialization() {
+  const init = usePlannerStore((state) => state.init);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
 }
 
-function formatNumber(value: number, digits = 0) {
-  return value.toLocaleString(undefined, {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  });
+function PageContent({ page }: { page: PlannerPageKey }) {
+  switch (page) {
+    case 'planner':
+      return <PlannerPage />;
+    case 'windows':
+      return <WindowsPage />;
+    case 'weekly':
+      return <WeeklyPage />;
+    case 'onboarding':
+    default:
+      return <OnboardingPage />;
+  }
 }
 
 export default function App() {
-  const { windows, weekly } = useMemo(() => {
-    const baseWindows = buildWindows(sampleProfile, plannedWorkouts);
-    return allocateWeeklyDeficits(sampleProfile, baseWindows, plannedWorkouts);
-  }, []);
+  usePlannerInitialization();
+
+  const status = usePlannerStore((state) => state.status);
+  const error = usePlannerStore((state) => state.error);
+  const page = usePlannerStore((state) => state.page);
+  const setPage = usePlannerStore((state) => state.setPage);
+  const currentProfile = usePlannerStore((state) => state.profile);
+
+  const headerSummary = useMemo(() => {
+    const efficiency = (currentProfile.efficiency * 100).toFixed(1);
+    const weight = currentProfile.weight_kg.toFixed(1);
+    return `${weight} kg • Efficiency ${efficiency}%`;
+  }, [currentProfile.efficiency, currentProfile.weight_kg]);
+
+  let content: JSX.Element;
+  if (status === 'error') {
+    content = (
+      <div className="rounded-lg border border-rose-900/60 bg-rose-950/60 p-4 text-sm text-rose-200">
+        Failed to load sample data: {error}
+      </div>
+    );
+  } else if (status !== 'ready') {
+    content = (
+      <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-6 text-sm text-slate-400">
+        Loading sample workouts and computing nutrition plan…
+      </div>
+    );
+  } else {
+    content = <PageContent page={page} />;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 text-slate-100">
-      <main className="mx-auto flex max-w-5xl flex-col gap-8">
-        <header>
-          <h1 className="text-3xl font-semibold tracking-tight">Preburner Core Engine</h1>
-          <p className="mt-2 text-slate-400">
-            Pure-function calculations using the sample profile and workouts.
-          </p>
+    <div className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <header className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Preburner Planner</h1>
+              <p className="text-sm text-slate-400">Fake adapter → core engine → reactive UI.</p>
+            </div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{headerSummary}</p>
+          </div>
+
+          <nav className="flex flex-wrap gap-2">
+            {pageDefinitions.map((definition) => {
+              const isActive = page === definition.key;
+              return (
+                <button
+                  key={definition.key}
+                  type="button"
+                  onClick={() => setPage(definition.key)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                    isActive
+                      ? 'bg-emerald-500 text-slate-900'
+                      : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  {definition.label}
+                </button>
+              );
+            })}
+          </nav>
         </header>
 
-        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-slate-950/40">
-          <h2 className="text-2xl font-semibold text-amber-300">Profile</h2>
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Sex</dt>
-              <dd className="text-sm">{sampleProfile.sex}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Age</dt>
-              <dd className="text-sm">{sampleProfile.age_years}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Weight</dt>
-              <dd className="text-sm">{formatNumber(sampleProfile.weight_kg, 1)} kg</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Height</dt>
-              <dd className="text-sm">{formatNumber(sampleProfile.height_cm, 0)} cm</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">FTP</dt>
-              <dd className="text-sm">{sampleProfile.ftp_watts} W</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Efficiency</dt>
-              <dd className="text-sm">{(sampleProfile.efficiency * 100).toFixed(1)}%</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Activity factor</dt>
-              <dd className="text-sm">{sampleProfile.activityFactorDefault.toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Deficit cap / window</dt>
-              <dd className="text-sm">{formatNumber(sampleProfile.deficitCapPerWindow)} kcal</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Weekly target</dt>
-              <dd className="text-sm">
-                {formatNumber(Math.abs(sampleProfile.targetKgPerWeek) * sampleProfile.kcalPerKg)} kcal
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-2xl font-semibold text-emerald-300">Planned Workouts</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {plannedWorkouts.map((workout) => (
-              <article
-                key={workout.id}
-                className="rounded-lg border border-emerald-900/60 bg-emerald-900/10 p-4 shadow-lg shadow-emerald-950/20"
-              >
-                <header className="flex flex-col gap-1">
-                  <h3 className="text-lg font-semibold text-emerald-100">{workout.title}</h3>
-                  <p className="text-xs uppercase tracking-wide text-emerald-300/70">
-                    {workout.type} • {formatNumber(workout.duration_hr, 2)} h
-                  </p>
-                  <p className="text-xs text-emerald-200/80">{formatDate(workout.startISO)}</p>
-                </header>
-                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <dt className="text-emerald-300/70">Planned energy</dt>
-                    <dd className="font-mono text-emerald-100">{formatNumber(workout.planned_kJ ?? 0)} kJ</dd>
-                  </div>
-                  <div>
-                    <dt className="text-emerald-300/70">kJ source</dt>
-                    <dd className="text-emerald-100/80">{workout.kj_source}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className="lg:w-80">
+            <SettingsPanel />
           </div>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-2xl font-semibold text-sky-300">Windows</h2>
-          <div className="grid gap-3">
-            {windows.map((window) => (
-              <article
-                key={`${window.prevWorkoutId}-${window.nextWorkoutId}`}
-                className="rounded-lg border border-sky-900/60 bg-sky-900/10 p-4 shadow-lg shadow-sky-950/20"
-              >
-                <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-sky-100">{window.nextWorkoutType} window</h3>
-                    <p className="text-xs text-sky-200/80">Next workout: {window.nextWorkoutId}</p>
-                  </div>
-                  <p className="text-xs text-sky-200/70">
-                    {formatDate(window.windowStartISO)} → {formatDate(window.windowEndISO)}
-                  </p>
-                </header>
-                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
-                  <div>
-                    <dt className="text-sky-300/70">Need</dt>
-                    <dd className="font-mono text-sky-100">{formatNumber(window.need_kcal)} kcal</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sky-300/70">Target</dt>
-                    <dd className="font-mono text-sky-100">{formatNumber(window.target_kcal)} kcal</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sky-300/70">Activity factor</dt>
-                    <dd className="text-sky-100">{window.activityFactorApplied.toFixed(2)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sky-300/70">Carb plan</dt>
-                    <dd className="text-sky-100">
-                      {formatNumber(window.carbs.g_per_hr, 1)} g/hr · pre {formatNumber(window.carbs.pre_g, 1)} g ·
-                      during {formatNumber(window.carbs.during_g, 1)} g
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sky-300/70">Macros</dt>
-                    <dd className="text-sky-100">
-                      P {formatNumber(window.macros.protein_g, 1)} g · F {formatNumber(window.macros.fat_g, 1)} g · C
-                      {" "}
-                      {formatNumber(window.macros.carb_g, 1)} g
-                    </dd>
-                  </div>
-                </dl>
-                {window.notes.length > 0 ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-sky-200/80">
-                    {window.notes.map((note) => (
-                      <li key={note}>{note}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-2xl font-semibold text-fuchsia-300">Weekly summary</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {weekly.map((week) => (
-              <article
-                key={week.weekKey}
-                className="rounded-lg border border-fuchsia-900/60 bg-fuchsia-900/10 p-4 shadow-lg shadow-fuchsia-950/20"
-              >
-                <header className="flex flex-col gap-1">
-                  <h3 className="text-lg font-semibold text-fuchsia-100">{week.weekKey}</h3>
-                  <p className="text-xs text-fuchsia-200/80">
-                    {formatDate(week.weekStartISO)} → {formatDate(week.weekEndISO)}
-                  </p>
-                </header>
-                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <dt className="text-fuchsia-300/70">Target deficit</dt>
-                    <dd className="font-mono text-fuchsia-100">
-                      {formatNumber(week.weeklyTargetDeficit_kcal)} kcal
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-fuchsia-300/70">Allocated</dt>
-                    <dd className="font-mono text-fuchsia-100">
-                      {formatNumber(week.weeklyAllocated_kcal)} kcal
-                    </dd>
-                  </div>
-                  {week.carryOver_kcal ? (
-                    <div>
-                      <dt className="text-fuchsia-300/70">Carryover</dt>
-                      <dd className="font-mono text-fuchsia-100">
-                        {formatNumber(week.carryOver_kcal)} kcal
-                      </dd>
-                    </div>
-                  ) : null}
-                  <div className="sm:col-span-2">
-                    <dt className="text-fuchsia-300/70">Macro totals</dt>
-                    <dd className="text-fuchsia-100">
-                      P {formatNumber(week.macros.protein_g, 1)} g · F {formatNumber(week.macros.fat_g, 1)} g · C{' '}
-                      {formatNumber(week.macros.carb_g, 1)} g
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
-      </main>
+          <main className="flex-1">{content}</main>
+        </div>
+      </div>
     </div>
   );
 }
