@@ -11,8 +11,10 @@
     "demo": "tsc --project tsconfig.demo.json && node --experimental-specifier-resolution=node dist-demo/scripts/demo.js"
   },
   "dependencies": {
+    "dexie": "^4.0.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
