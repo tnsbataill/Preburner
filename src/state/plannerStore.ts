@@ -352,11 +352,14 @@ function applyWeightFlags(
     }
   }
 
-  if (summary && summary.expectedDeltaKg < -0.1 && summary.actualDeltaKg > 0.25) {
-    const latest = sorted[sorted.length - 1];
-    const window = findWindowAfterDate(windows, latest.dateISO);
-    if (window && !window.notes.includes(WINDOW_UNDER_RECOVERY_FLAG)) {
-      window.notes.push(WINDOW_UNDER_RECOVERY_FLAG);
+  if (summary && summary.expectedDeltaKg < -0.1) {
+    const extraLossKg = summary.expectedDeltaKg - summary.actualDeltaKg;
+    if (extraLossKg >= 0.35) {
+      const latest = sorted[sorted.length - 1];
+      const window = findWindowAfterDate(windows, latest.dateISO);
+      if (window && !window.notes.includes(WINDOW_UNDER_RECOVERY_FLAG)) {
+        window.notes.push(WINDOW_UNDER_RECOVERY_FLAG);
+      }
     }
   }
 }

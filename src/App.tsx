@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { SettingsPanel } from './components/SettingsPanel.js';
 import { WeightTracker } from './components/WeightTracker.js';
+import { QuickAdjustmentsPanel } from './components/QuickAdjustmentsPanel.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { PlannerPage } from './pages/PlannerPage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
 import { WindowsPage } from './pages/WindowsPage.js';
+import { SettingsPage } from './pages/SettingsPage.js';
 import { usePlannerStore } from './state/plannerStore.js';
 import type { PlannerPage as PlannerPageKey } from './state/types.js';
 
@@ -13,6 +14,7 @@ const pageDefinitions: { key: PlannerPageKey; label: string }[] = [
   { key: 'planner', label: 'Planner' },
   { key: 'windows', label: 'Windows' },
   { key: 'weekly', label: 'Weekly' },
+  { key: 'settings', label: 'Settings' },
 ];
 
 function usePlannerInitialization() {
@@ -31,6 +33,8 @@ function PageContent({ page }: { page: PlannerPageKey }) {
       return <WindowsPage />;
     case 'weekly':
       return <WeeklyPage />;
+    case 'settings':
+      return <SettingsPage />;
     case 'onboarding':
     default:
       return <OnboardingPage />;
@@ -96,13 +100,11 @@ export default function App() {
         </header>
 
         <div className="flex flex-col gap-6 lg:flex-row">
-          <div className="lg:w-80">
-            <SettingsPanel />
-          </div>
-          <main className="flex-1 space-y-6">
+          <aside className="flex flex-col gap-4 lg:w-80">
             <WeightTracker />
-            {content}
-          </main>
+            {page !== 'settings' ? <QuickAdjustmentsPanel /> : null}
+          </aside>
+          <main className="flex-1 space-y-6">{content}</main>
         </div>
       </div>
     </div>
