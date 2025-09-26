@@ -25,7 +25,7 @@ describe('IntervalsProvider', () => {
 
       if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({
-          id: 0,
+          id: '0',
           ftp: 260,
           weight: 70.2,
           sex: 'M',
