@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { estimateWorkoutKilojoules } from '../calc/prescribe.js';
 import { usePlannerStore } from '../state/plannerStore.js';
 
 function formatDate(iso: string) {
@@ -22,7 +23,7 @@ export function PlannerPage() {
   const totalPlannedKj = useMemo(
     () =>
       workouts.reduce((sum, workout) => {
-        return sum + (workout.planned_kJ ?? 0);
+        return sum + estimateWorkoutKilojoules(workout);
       }, 0),
     [workouts],
   );
@@ -58,30 +59,35 @@ export function PlannerPage() {
         ) : null}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {workouts.map((workout) => (
-            <article
-              key={workout.id}
-              className="space-y-3 rounded-lg border border-slate-800/80 bg-slate-950/70 p-4 shadow-sm shadow-slate-950/40"
-            >
-              <header className="space-y-1">
-                <h3 className="text-lg font-semibold text-slate-100">{workout.title ?? workout.id}</h3>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  {workout.type} • {workout.duration_hr.toFixed(2)} h • FTP {profile.ftp_watts ?? '—'} W
-                </p>
-                <p className="text-xs text-slate-400">{formatDate(workout.startISO)}</p>
-              </header>
-              <dl className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-                <div>
-                  <dt>Planned energy</dt>
-                  <dd className="font-mono text-slate-200">{workout.planned_kJ?.toFixed(0) ?? '—'} kJ</dd>
-                </div>
-                <div>
-                  <dt>kJ source</dt>
-                  <dd>{workout.kj_source}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
+          {workouts.map((workout) => {
+            const plannedKj = estimateWorkoutKilojoules(workout);
+            const kjSource = workout.kj_source ?? 'Estimated (IF/TSS)';
+
+            return (
+              <article
+                key={workout.id}
+                className="space-y-3 rounded-lg border border-slate-800/80 bg-slate-950/70 p-4 shadow-sm shadow-slate-950/40"
+              >
+                <header className="space-y-1">
+                  <h3 className="text-lg font-semibold text-slate-100">{workout.title ?? workout.id}</h3>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    {workout.type} • {workout.duration_hr.toFixed(2)} h • FTP {profile.ftp_watts ?? '—'} W
+                  </p>
+                  <p className="text-xs text-slate-400">{formatDate(workout.startISO)}</p>
+                </header>
+                <dl className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>
+                    <dt>Planned energy</dt>
+                    <dd className="font-mono text-slate-200">{plannedKj.toFixed(0)} kJ</dd>
+                  </div>
+                  <div>
+                    <dt>kJ source</dt>
+                    <dd>{kjSource}</dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

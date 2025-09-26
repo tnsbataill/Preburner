@@ -6,7 +6,7 @@ function describeNote(note: string): string {
     return 'Safety flag: >1 kg overnight drop detected — deficit halved for this window.';
   }
   if (note === WINDOW_UNDER_RECOVERY_FLAG) {
-    return 'Safety flag: Weight trending up during deficit week — deficit paused this window to prioritise recovery.';
+    return 'Safety flag: Weight loss exceeding target — deficit paused this window to prioritise recovery.';
   }
   return note;
 }
