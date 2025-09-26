@@ -4,7 +4,7 @@ import { OnboardingPage } from './pages/OnboardingPage.js';
 import { PlannerPage } from './pages/PlannerPage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
 import { WindowsPage } from './pages/WindowsPage.js';
-import { usePlannerStore } from './state/plannerStore.js';
+import { usePlannerStore } from './state/plannerStoreOld.js';
 import type { PlannerPage as PlannerPageKey } from './state/types.js';
 
 const pageDefinitions: { key: PlannerPageKey; label: string }[] = [

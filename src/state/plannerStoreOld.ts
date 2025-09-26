@@ -163,11 +163,9 @@ function clampRangeDays(value: number): number {
 }
 
 function createDefaultConnection(): IntervalsConnectionSettings {
-  const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return {
     apiKey: '',
-    startDateISO: todayUTC.toISOString().slice(0, 10),
+    startDateISO: SAMPLE_START_ISO.slice(0, 10),
     rangeDays: DEFAULT_RANGE_DAYS,
     athleteId: '',
   };
@@ -221,18 +219,11 @@ function computeIntervalsRange(settings: IntervalsConnectionSettings): {
   startISO: string;
   endISO: string;
 } {
-  // Use today's date (UTC midnight) as the baseline. If the user selected a future
-  // startDateISO, use that; otherwise ignore past dates and start from today.
-  const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const parsed = new Date(`${settings.startDateISO}T00:00:00Z`);
-  const candidate = Number.isNaN(parsed.getTime()) ? todayUTC : parsed;
-  const startDate = candidate < todayUTC ? todayUTC : candidate;
-  const rangeDays = clampRangeDays(settings.rangeDays);
-  const endDate = new Date(startDate.getTime() + rangeDays * 24 * 60 * 60 * 1000);
+  const startDate = Number.isNaN(parsed.getTime()) ? new Date(SAMPLE_START_ISO) : parsed;
+  const endDate = new Date(startDate.getTime() + settings.rangeDays * 24 * 60 * 60 * 1000);
   return { startISO: startDate.toISOString(), endISO: endDate.toISOString() };
 }
-
 
 function shouldResetLastSync(key: keyof IntervalsConnectionSettings): boolean {
   return key === 'rangeDays' || key === 'startDateISO' || key === 'athleteId';

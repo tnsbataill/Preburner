@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { usePlannerStore } from '../state/plannerStore.js';
+import { usePlannerStore } from '../state/plannerStoreOld.js';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
