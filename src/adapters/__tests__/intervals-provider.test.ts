@@ -23,6 +23,16 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
+      if (path === '/api/v1/athlete/0') {
+        return buildJsonResponse({
+          id: 0,
+          ftp: 260,
+          weight: 70.2,
+          sex: 'M',
+          birth_date: '1990-06-15',
+        });
+      }
+
       if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
         return buildJsonResponse([
           { date: '2024-06-01', value: 70.4 },
@@ -70,7 +80,7 @@ describe('IntervalsProvider', () => {
     expect(workout.kj_source).toBe('ICU Structured');
     expect(workout.steps).toHaveLength(2);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const eventsCall = fetchMock.mock.calls.find(([request]) =>
       request.toString().includes('/athlete/0/events.json'),
     );

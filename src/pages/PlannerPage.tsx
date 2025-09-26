@@ -62,6 +62,7 @@ export function PlannerPage() {
           {workouts.map((workout) => {
             const plannedKj = estimateWorkoutKilojoules(workout);
             const kjSource = workout.kj_source ?? 'Estimated (IF/TSS)';
+            const ftpDisplay = workout.ftp_watts_at_plan ?? profile.ftp_watts;
 
             return (
               <article
@@ -71,7 +72,8 @@ export function PlannerPage() {
                 <header className="space-y-1">
                   <h3 className="text-lg font-semibold text-slate-100">{workout.title ?? workout.id}</h3>
                   <p className="text-xs uppercase tracking-wide text-slate-500">
-                    {workout.type} • {workout.duration_hr.toFixed(2)} h • FTP {profile.ftp_watts ?? '—'} W
+                    {workout.type} • {workout.duration_hr.toFixed(2)} h • FTP{' '}
+                    {typeof ftpDisplay === 'number' ? ftpDisplay.toFixed(0) : '—'} W
                   </p>
                   <p className="text-xs text-slate-400">{formatDate(workout.startISO)}</p>
                 </header>
