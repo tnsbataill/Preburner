@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { WeightTracker } from './components/WeightTracker.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
@@ -44,14 +44,6 @@ export default function App() {
   const error = usePlannerStore((state) => state.error);
   const page = usePlannerStore((state) => state.page);
   const setPage = usePlannerStore((state) => state.setPage);
-  const currentProfile = usePlannerStore((state) => state.profile);
-
-  const headerSummary = useMemo(() => {
-    const efficiency = (currentProfile.efficiency * 100).toFixed(1);
-    const weight = currentProfile.weight_kg.toFixed(1);
-    return `${weight} kg • Efficiency ${efficiency}%`;
-  }, [currentProfile.efficiency, currentProfile.weight_kg]);
-
   let content: JSX.Element;
   if (status === 'error') {
     content = (
@@ -76,9 +68,10 @@ export default function App() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Preburner Planner</h1>
-              <p className="text-sm text-slate-400">Fake adapter → core engine → reactive UI.</p>
+              <p className="text-sm text-slate-400">
+                Nutrition and weight planning for Intervals.icu athletes.
+              </p>
             </div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">{headerSummary}</p>
           </div>
 
           <nav className="flex flex-wrap gap-2">

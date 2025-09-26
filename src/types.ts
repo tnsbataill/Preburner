@@ -87,4 +87,5 @@ export interface WeeklyPlan {
 export interface WeightEntry {
   dateISO: string;
   weight_kg: number;
+  source?: 'manual' | 'intervals';
 }

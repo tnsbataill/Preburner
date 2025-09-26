@@ -6,7 +6,7 @@ function describeNote(note: string): string {
     return 'Safety flag: >1 kg overnight drop detected — deficit halved for this window.';
   }
   if (note === WINDOW_UNDER_RECOVERY_FLAG) {
-    return 'Safety flag: Weight trending up during deficit week — deficit blocked for this window.';
+    return 'Safety flag: Weight trending up during deficit week — deficit paused this window to prioritise recovery.';
   }
   return note;
 }
@@ -66,7 +66,7 @@ export function WindowsPage() {
                 <dt className="uppercase tracking-wide text-slate-500">Carbs</dt>
                 <dd>
                   {window.carbs.g_per_hr.toFixed(1)} g/hr • pre {window.carbs.pre_g.toFixed(1)} g • during{' '}
-                  {window.carbs.during_g.toFixed(1)} g
+                  {window.carbs.during_g.toFixed(1)} g • post {window.carbs.post_g.toFixed(1)} g
                 </dd>
               </div>
               <div>

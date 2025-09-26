@@ -25,6 +25,7 @@ interface WorkoutCacheRecord {
 interface WeightRecord {
   dateISO: string;
   weight_kg: number;
+  source?: 'manual' | 'intervals';
 }
 
 export interface StoredIntervalsSettings {
@@ -186,7 +187,11 @@ export async function loadStoredWeights(): Promise<WeightEntry[]> {
 
   const table = db.table<WeightRecord, string>('weights');
   const records = await table.toArray();
-  return records.map((record) => ({ dateISO: record.dateISO, weight_kg: record.weight_kg }));
+  return records.map((record) => ({
+    dateISO: record.dateISO,
+    weight_kg: record.weight_kg,
+    source: record.source,
+  }));
 }
 
 export async function persistWeights(weights: WeightEntry[]): Promise<void> {
@@ -198,6 +203,12 @@ export async function persistWeights(weights: WeightEntry[]): Promise<void> {
   const table = db.table<WeightRecord, string>('weights');
   await table.clear();
   if (weights.length > 0) {
-    await table.bulkPut(weights.map((weight) => ({ dateISO: weight.dateISO, weight_kg: weight.weight_kg })));
+    await table.bulkPut(
+      weights.map((weight) => ({
+        dateISO: weight.dateISO,
+        weight_kg: weight.weight_kg,
+        source: weight.source,
+      })),
+    );
   }
 }

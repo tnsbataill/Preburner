@@ -90,7 +90,8 @@ export function WeightTracker() {
       <header className="space-y-1">
         <h2 className="text-lg font-semibold text-emerald-200">Weight tracking</h2>
         <p className="text-xs text-slate-400">
-          Log morning weight to tune deficit safety checks. Entries are stored locally in your browser.
+          Log morning weight to tune deficit safety checks. Entries are stored locally in your browser, and synced
+          Intervals.icu history is merged automatically when available.
         </p>
       </header>
 
@@ -183,13 +184,17 @@ export function WeightTracker() {
                 <span className="font-mono text-sm text-slate-100">
                   {formatWeight(entry.weight_kg, useImperial)} {unitLabel}
                 </span>
-                <button
-                  type="button"
-                  className="text-[0.65rem] font-semibold uppercase tracking-wide text-rose-300 hover:text-rose-200"
-                  onClick={() => deleteWeight(entry.dateISO)}
-                >
-                  Remove
-                </button>
+                {entry.source === 'intervals' ? (
+                  <span className="text-[0.6rem] uppercase tracking-wide text-emerald-300">Synced</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-[0.65rem] font-semibold uppercase tracking-wide text-rose-300 hover:text-rose-200"
+                    onClick={() => deleteWeight(entry.dateISO)}
+                  >
+                    Remove
+                  </button>
+                )}
               </li>
             ))}
           </ul>

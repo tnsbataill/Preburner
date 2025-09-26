@@ -23,6 +23,13 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
+      if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
+        return buildJsonResponse([
+          { date: '2024-06-01', value: 70.4 },
+          { date: '2024-06-05', value: 70.1 },
+        ]);
+      }
+
       if (path.startsWith('/api/v1/athlete/0/events.json')) {
         return buildJsonResponse([
           {
@@ -63,8 +70,12 @@ describe('IntervalsProvider', () => {
     expect(workout.kj_source).toBe('ICU Structured');
     expect(workout.steps).toHaveLength(2);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [eventsUrl, eventsInit] = fetchMock.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const eventsCall = fetchMock.mock.calls.find(([request]) =>
+      request.toString().includes('/athlete/0/events.json'),
+    );
+    expect(eventsCall).toBeDefined();
+    const [eventsUrl, eventsInit] = eventsCall!;
     expect(eventsUrl.toString()).toBe(
       'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
     );
@@ -72,6 +83,11 @@ describe('IntervalsProvider', () => {
       Authorization: `Basic ${Buffer.from('API_KEY:abc123').toString('base64')}`,
       Accept: 'application/json',
     });
+
+    const context = provider.getLatestAthleteContext();
+    expect(context?.weights).toHaveLength(2);
+    expect(context?.profile?.weight_kg).toBeCloseTo(70.1);
+    expect(context?.profile?.ftp_watts).toBe(255);
 
     expect(debugSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,6 +135,10 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
+      if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
+        return buildJsonResponse([]);
+      }
+
       if (path.startsWith('/api/v1/athlete/0/events.json')) {
         return new Response('Access denied', {
           status: 403,
@@ -139,8 +159,8 @@ describe('IntervalsProvider', () => {
       /Access denied \(403\)\. Using a personal API key\? Use Basic auth with username "API_KEY" and your key as the password\./,
     );
 
-    const eventsCall = fetchMock.mock.calls.find(([url]) =>
-      url.toString().startsWith('https://intervals.icu/api/v1/athlete/0/events.json'),
+    const eventsCall = fetchMock.mock.calls.find(([request]) =>
+      request.toString().startsWith('https://intervals.icu/api/v1/athlete/0/events.json'),
     );
     expect(eventsCall).toBeDefined();
     const [eventsUrl, eventsInit] = eventsCall!;
