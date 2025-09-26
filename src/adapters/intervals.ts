@@ -18,7 +18,7 @@ export interface IntervalsDebugEntry {
 type IntervalsDebugLogger = (entry: IntervalsDebugEntry) => void;
 
 interface IntervalsAthleteResponse {
-  id: number;
+  id: number | string;
   ftp?: number | string;
   weight?: number | string;
   weight_kg?: number | string;
@@ -772,10 +772,22 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
 
   private async loadAthleteProfile(path: string): Promise<void> {
     const athlete = (await this.fetchFromApi(path)) as IntervalsAthleteResponse;
-    if (!athlete || typeof athlete.id !== 'number') {
+    if (!athlete) {
       throw new Error('Unable to load Intervals.icu athlete profile');
     }
-    this.athleteId = athlete.id;
+
+    const parsedId = toFiniteNumber(athlete.id);
+    const resolvedAthleteId =
+      typeof parsedId === 'number' && parsedId >= 0
+        ? Math.round(parsedId)
+        : typeof this.athleteId === 'number'
+          ? this.athleteId
+          : undefined;
+
+    if (typeof resolvedAthleteId !== 'number') {
+      throw new Error('Unable to load Intervals.icu athlete profile');
+    }
+    this.athleteId = resolvedAthleteId;
     const ftp = toFiniteNumber(athlete.ftp);
     if (typeof ftp === 'number') {
       this.athleteFtp = ftp;
