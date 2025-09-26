@@ -260,23 +260,75 @@ function parseWeightSeries(response: unknown): WeightEntry[] {
     entries.set(dateKey, weight);
   };
 
-  if (Array.isArray(response)) {
-    for (const item of response) {
-      if (item && typeof item === 'object') {
-        const record = item as Record<string, unknown>;
-        addEntry(record.date ?? record.d ?? record.day ?? record.start, record.value ?? record.v ?? record.weight);
+  const resolveWeightValue = (record: Record<string, unknown>): unknown => {
+    if (record.weight !== undefined) return record.weight;
+    const fields = record.fields;
+    if (fields && typeof fields === 'object' && (fields as Record<string, unknown>).weight !== undefined) {
+      return (fields as Record<string, unknown>).weight;
+    }
+    const metrics = record.metrics;
+    if (metrics && typeof metrics === 'object' && (metrics as Record<string, unknown>).weight !== undefined) {
+      return (metrics as Record<string, unknown>).weight;
+    }
+    if (record.value !== undefined) return record.value;
+    if (record.v !== undefined) return record.v;
+    return undefined;
+  };
+
+  const processRecord = (record: Record<string, unknown>, fallbackKey?: string) => {
+    const dateCandidate = record.date ?? record.d ?? record.day ?? record.start ?? fallbackKey;
+    addEntry(dateCandidate, resolveWeightValue(record));
+  };
+
+  const normaliseResponse = (input: unknown): void => {
+    if (!input) return;
+
+    if (typeof input === 'string') {
+      const lines = input
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (lines.length < 2) return;
+      const headers = lines[0].split(',').map((header) => header.trim().toLowerCase());
+      const dateIndex = headers.findIndex((header) => header === 'date' || header === 'day');
+      const weightIndex = headers.findIndex((header) => header === 'weight' || header === 'weight_kg');
+      if (dateIndex === -1 || weightIndex === -1) return;
+      for (const line of lines.slice(1)) {
+        const values = line.split(',');
+        const record: Record<string, unknown> = {};
+        record.date = values[dateIndex]?.trim();
+        record.weight = values[weightIndex]?.trim();
+        processRecord(record);
+      }
+      return;
+    }
+
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        if (item && typeof item === 'object') {
+          processRecord(item as Record<string, unknown>);
+        }
+      }
+      return;
+    }
+
+    if (input && typeof input === 'object') {
+      const recordContainer = input as Record<string, unknown>;
+      if (Array.isArray(recordContainer.records)) {
+        normaliseResponse(recordContainer.records);
+        return;
+      }
+      for (const [key, value] of Object.entries(recordContainer)) {
+        if (typeof value === 'number' || typeof value === 'string') {
+          addEntry(key, value);
+        } else if (value && typeof value === 'object') {
+          processRecord(value as Record<string, unknown>, key);
+        }
       }
     }
-  } else if (response && typeof response === 'object') {
-    for (const [key, value] of Object.entries(response as Record<string, unknown>)) {
-      if (typeof value === 'number' || typeof value === 'string') {
-        addEntry(key, value);
-      } else if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        addEntry(record.date ?? record.d ?? key, record.value ?? record.v ?? record.weight);
-      }
-    }
-  }
+  };
+
+  normaliseResponse(response);
 
   return Array.from(entries.entries())
     .map(([dateISO, weight_kg]) => ({ dateISO, weight_kg, source: 'intervals' as const }))
@@ -893,15 +945,14 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     const oldestBase = extractDateParam(startISO) ?? newest;
     const oldest = shiftDateKey(oldestBase, -60);
     const query = `oldest=${oldest}&newest=${newest}&dir=asc`;
-    const candidates = [
-      `/athlete/${this.athleteId}/metrics/weight?${query}`,
-      `/athlete/${this.athleteId}/metrics/weight.json?${query}`,
-      `/athlete/${this.athleteId}/body?${query}`,
+    const candidates: { path: string; responseType: 'json' | 'text' }[] = [
+      { path: `/athlete/${this.athleteId}/wellness.json?${query}`, responseType: 'json' },
+      { path: `/athlete/${this.athleteId}/wellness.csv?${query}`, responseType: 'text' },
     ];
 
-    for (const path of candidates) {
+    for (const candidate of candidates) {
       try {
-        const response = await this.fetchFromApi(path);
+        const response = await this.fetchFromApi(candidate.path, candidate.responseType);
         const weights = parseWeightSeries(response);
         if (weights.length > 0) {
           this.log('info', `Loaded ${weights.length} weight entries`, `${oldest} → ${newest}`);
@@ -909,7 +960,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
         }
       } catch (error) {
         const detail = error instanceof Error ? error.message : undefined;
-        this.log('warn', `Unable to load weight history from ${path}`, detail);
+        this.log('warn', `Unable to load weight history from ${candidate.path}`, detail);
       }
     }
 
