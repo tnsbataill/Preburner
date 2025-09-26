@@ -1,3 +1,5 @@
+// intervals.ts — corrected Intervals.icu provider
+
 import type { PlannedWorkout, SessionType, Step } from '../types.js';
 import type { PlannedWorkoutProvider } from './provider.js';
 
@@ -67,21 +69,19 @@ interface PlannedKilojoulesResult {
   source: PlannedWorkout['kj_source'];
 }
 
+/** Personal API key must be sent as Basic with username 'API_KEY' and password = key */
 function encodeBasicAuth(key: string): string {
-  if (typeof btoa === 'function') {
-    return `Basic ${btoa(`${key}:`)}`;
-  }
-  return `Basic ${Buffer.from(`${key}:`).toString('base64')}`;
+  const pair = `API_KEY:${key}`;
+  if (typeof btoa === 'function') return `Basic ${btoa(pair)}`;
+  // Node.js / server-side
+  // eslint-disable-next-line no-undef
+  return `Basic ${Buffer.from(pair).toString('base64')}`;
 }
 
 function normaliseIso(iso?: string): string | undefined {
-  if (!iso) {
-    return undefined;
-  }
+  if (!iso) return undefined;
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
+  if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString();
 }
 
@@ -99,12 +99,8 @@ function secondsFromEvent(event: IntervalsEventSummary): number | undefined {
 }
 
 function extractTags(collection: IntervalsTagCollection): string[] {
-  if (!collection) {
-    return [];
-  }
-  if (Array.isArray(collection)) {
-    return collection.map((tag) => String(tag));
-  }
+  if (!collection) return [];
+  if (Array.isArray(collection)) return collection.map((tag) => String(tag));
   return Object.keys(collection).map((key) => key);
 }
 
@@ -117,55 +113,30 @@ function inferSessionType(
   const lowered = name.toLowerCase();
   const tagString = tags.map((tag) => tag.toLowerCase()).join(' ');
 
-  if (tagString.includes('rest') || lowered.includes('rest day') || lowered.includes('off bike')) {
-    return 'Rest';
-  }
-
-  if (tagString.includes('race') || lowered.includes('race') || lowered.includes('crits')) {
-    return 'Race';
-  }
-
-  if (lowered.includes('vo2') || lowered.includes('v02') || tagString.includes('vo2')) {
-    return 'VO2';
-  }
-
-  if (lowered.includes('threshold') || lowered.includes('sweet spot') || lowered.includes('sweetspot')) {
-    return 'Threshold';
-  }
-
-  if (lowered.includes('tempo') || tagString.includes('tempo')) {
-    return 'Tempo';
-  }
+  if (tagString.includes('rest') || lowered.includes('rest day') || lowered.includes('off bike')) return 'Rest';
+  if (tagString.includes('race') || lowered.includes('race') || lowered.includes('crits')) return 'Race';
+  if (lowered.includes('vo2') || lowered.includes('v02') || tagString.includes('vo2')) return 'VO2';
+  if (lowered.includes('threshold') || lowered.includes('sweet spot') || lowered.includes('sweetspot')) return 'Threshold';
+  if (lowered.includes('tempo') || tagString.includes('tempo')) return 'Tempo';
 
   const maxPct = steps?.reduce((max, step) => {
     if (step.target_type === '%FTP') {
       const hi = step.target_hi ?? step.target_lo ?? 0;
       return Math.max(max, hi);
     }
-    if (step.target_type === 'Watts' && step.target_hi) {
-      return Math.max(max, step.target_hi);
-    }
+    if (step.target_type === 'Watts' && step.target_hi) return Math.max(max, step.target_hi);
     return max;
   }, 0);
 
-  if (maxPct && maxPct >= 115) {
-    return 'VO2';
-  }
-  if (maxPct && maxPct >= 100) {
-    return 'Threshold';
-  }
-
-  if (lowered.includes('recovery')) {
-    return 'Endurance';
-  }
+  if (maxPct && maxPct >= 115) return 'VO2';
+  if (maxPct && maxPct >= 100) return 'Threshold';
+  if (lowered.includes('recovery')) return 'Endurance';
 
   return defaultType;
 }
 
 function ensureDurationHours(seconds: number | undefined, startISO?: string, endISO?: string): number {
-  if (seconds && seconds > 0) {
-    return seconds / 3600;
-  }
+  if (seconds && seconds > 0) return seconds / 3600;
   if (startISO && endISO) {
     const start = Date.parse(startISO);
     const end = Date.parse(endISO);
@@ -177,83 +148,53 @@ function ensureDurationHours(seconds: number | undefined, startISO?: string, end
 }
 
 function buildEndISO(startISO: string | undefined, seconds: number | undefined, fallbackEnd?: string): string | undefined {
-  if (fallbackEnd) {
-    return normaliseIso(fallbackEnd);
-  }
-  if (!startISO || !seconds) {
-    return undefined;
-  }
+  if (fallbackEnd) return normaliseIso(fallbackEnd);
+  if (!startISO || !seconds) return undefined;
   const start = Date.parse(startISO);
-  if (Number.isNaN(start)) {
-    return undefined;
-  }
+  if (Number.isNaN(start)) return undefined;
   const endMs = start + seconds * 1000;
   return new Date(endMs).toISOString();
 }
 
 function extractDateParam(iso?: string): string | undefined {
-  if (!iso) {
-    return undefined;
-  }
+  if (!iso) return undefined;
   const match = /^\d{4}-\d{2}-\d{2}/.exec(iso);
-  if (match) {
-    return match[0];
-  }
+  if (match) return match[0];
   const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return undefined;
-  }
+  if (Number.isNaN(parsed.getTime())) return undefined;
   return parsed.toISOString().slice(0, 10);
 }
 
 function mapTagsToDefaultType(tags: string[], fallback: SessionType): SessionType {
   const lowered = tags.map((tag) => tag.toLowerCase());
-  if (lowered.includes('vo2') || lowered.includes('vo₂')) {
-    return 'VO2';
-  }
-  if (lowered.includes('threshold')) {
-    return 'Threshold';
-  }
-  if (lowered.includes('tempo')) {
-    return 'Tempo';
-  }
-  if (lowered.includes('race')) {
-    return 'Race';
-  }
-  if (lowered.includes('rest')) {
-    return 'Rest';
-  }
+  if (lowered.includes('vo2') || lowered.includes('vo₂')) return 'VO2';
+  if (lowered.includes('threshold')) return 'Threshold';
+  if (lowered.includes('tempo')) return 'Tempo';
+  if (lowered.includes('race')) return 'Race';
+  if (lowered.includes('rest')) return 'Rest';
   return fallback;
 }
 
 function truncate(value: string, limit = 200): string {
-  if (value.length <= limit) {
-    return value;
-  }
+  if (value.length <= limit) return value;
   return `${value.slice(0, limit - 1)}…`;
 }
 
 function summariseErrorBody(body: string): string | undefined {
   const trimmed = body.trim();
-  if (!trimmed) {
-    return undefined;
-  }
+  if (!trimmed) return undefined;
   try {
     const parsed = JSON.parse(trimmed);
-    if (typeof parsed === 'string') {
-      return truncate(parsed);
-    }
+    if (typeof parsed === 'string') return truncate(parsed);
     if (parsed && typeof parsed === 'object') {
       const candidates = ['message', 'error', 'detail', 'title'] as const;
       for (const key of candidates) {
         const value = (parsed as Record<string, unknown>)[key];
-        if (typeof value === 'string' && value.trim()) {
-          return truncate(value.trim());
-        }
+        if (typeof value === 'string' && value.trim()) return truncate(value.trim());
       }
       return truncate(JSON.stringify(parsed));
     }
-  } catch (error) {
+  } catch {
     // fall through to returning the raw trimmed body
   }
   return truncate(trimmed);
@@ -261,9 +202,7 @@ function summariseErrorBody(body: string): string | undefined {
 
 function normaliseApiPath(path: string): string {
   const trimmed = path.trim();
-  if (!trimmed) {
-    return '';
-  }
+  if (!trimmed) return '';
   const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
   if (withoutLeadingSlash.startsWith(ICU_API_PREFIX)) {
     return withoutLeadingSlash.slice(ICU_API_PREFIX.length);
@@ -276,9 +215,7 @@ function estimateFromIf(
   intensityFactor: number | undefined,
   durationHr: number,
 ): number | undefined {
-  if (!ftp || !intensityFactor || intensityFactor <= 0 || durationHr <= 0) {
-    return undefined;
-  }
+  if (!ftp || !intensityFactor || intensityFactor <= 0 || durationHr <= 0) return undefined;
   const avgWatts = ftp * intensityFactor;
   return (avgWatts * durationHr * 3600) / 1000;
 }
@@ -288,20 +225,14 @@ function estimateFromTss(
   plannedTss: number | undefined,
   durationHr: number,
 ): number | undefined {
-  if (!ftp || !plannedTss || plannedTss <= 0 || durationHr <= 0) {
-    return undefined;
-  }
+  if (!ftp || !plannedTss || plannedTss <= 0 || durationHr <= 0) return undefined;
   const ifactor = Math.sqrt(plannedTss / (durationHr * 100));
-  if (!Number.isFinite(ifactor) || ifactor <= 0) {
-    return undefined;
-  }
+  if (!Number.isFinite(ifactor) || ifactor <= 0) return undefined;
   return estimateFromIf(ftp, ifactor, durationHr);
 }
 
 function sumStepKilojoules(steps: Step[], ftp: number | undefined): number | undefined {
-  if (!ftp || steps.length === 0) {
-    return undefined;
-  }
+  if (!ftp || steps.length === 0) return undefined;
   let total = 0;
   for (const step of steps) {
     if (step.target_type === '%FTP') {
@@ -316,28 +247,20 @@ function sumStepKilojoules(steps: Step[], ftp: number | undefined): number | und
       total += watts * step.duration_s;
     }
   }
-  if (total <= 0) {
-    return undefined;
-  }
+  if (total <= 0) return undefined;
   return total / 1000;
 }
 
 function parseStructuredSteps(structured: unknown): Step[] | undefined {
-  if (!structured) {
-    return undefined;
-  }
+  if (!structured) return undefined;
 
   if (Array.isArray(structured)) {
     const steps: Step[] = [];
     let cursor = 0;
     for (const item of structured) {
-      if (!item || typeof item !== 'object') {
-        continue;
-      }
+      if (!item || typeof item !== 'object') continue;
       const duration = Number('duration' in item ? (item as any).duration : (item as any).Duration);
-      if (!Number.isFinite(duration) || duration <= 0) {
-        continue;
-      }
+      if (!Number.isFinite(duration) || duration <= 0) continue;
       const targetType = (item as any).target_type ?? (item as any).TargetType;
       if (typeof targetType === 'string' && targetType.toLowerCase() === 'watts') {
         const lo = Number((item as any).target_lo ?? (item as any).TargetPower ?? (item as any).TargetLow);
@@ -387,18 +310,14 @@ function parseStructuredSteps(structured: unknown): Step[] | undefined {
 }
 
 function parseZwoSteps(zwo: string): Step[] | undefined {
-  if (!zwo.trim()) {
-    return undefined;
-  }
+  if (!zwo.trim()) return undefined;
 
   if (typeof DOMParser !== 'undefined') {
     try {
       const parser = new DOMParser();
       const doc = parser.parseFromString(zwo, 'application/xml');
       const workout = doc.querySelector('workout') ?? doc.querySelector('Workout');
-      if (!workout) {
-        return undefined;
-      }
+      if (!workout) return undefined;
       const steps: Step[] = [];
       let cursor = 0;
 
@@ -415,13 +334,9 @@ function parseZwoSteps(zwo: string): Step[] | undefined {
       };
 
       const parsePower = (value: string | null): number => {
-        if (!value) {
-          return 0;
-        }
+        if (!value) return 0;
         const numeric = Number(value);
-        if (!Number.isFinite(numeric)) {
-          return 0;
-        }
+        if (!Number.isFinite(numeric)) return 0;
         return numeric <= 1 ? numeric * 100 : numeric;
       };
 
@@ -429,9 +344,8 @@ function parseZwoSteps(zwo: string): Step[] | undefined {
       for (let i = 0; i < elements.length; i += 1) {
         const node = elements[i];
         const tag = node.tagName?.toLowerCase();
-        if (!tag) {
-          continue;
-        }
+        if (!tag) continue;
+
         if (tag === 'steadystate') {
           const duration = Number(node.getAttribute('Duration'));
           const power = parsePower(node.getAttribute('Power'));
@@ -450,9 +364,7 @@ function parseZwoSteps(zwo: string): Step[] | undefined {
           const repeatCount = Number.isFinite(repeats) && repeats > 0 ? Math.round(repeats) : 1;
           for (let r = 0; r < repeatCount; r += 1) {
             appendStep(onDuration, onPower, onPower);
-            if (offDuration > 0) {
-              appendStep(offDuration, offPower, offPower);
-            }
+            if (offDuration > 0) appendStep(offDuration, offPower, offPower);
           }
         } else if (tag === 'freeride') {
           const duration = Number(node.getAttribute('Duration'));
@@ -488,11 +400,7 @@ function extractPlannedKilojoules(
   ftp: number | undefined,
   durationHr: number,
 ): PlannedKilojoulesResult {
-  const directCandidates = [
-    event.planned_work_kj,
-    event.planned_work,
-    event.plannedWork,
-  ];
+  const directCandidates = [event.planned_work_kj, event.planned_work, event.plannedWork];
   for (const candidate of directCandidates) {
     if (typeof candidate === 'number' && candidate > 0) {
       return { planned_kJ: candidate, source: 'ICU Structured' };
@@ -501,20 +409,14 @@ function extractPlannedKilojoules(
 
   if (steps && steps.length > 0) {
     const estimated = sumStepKilojoules(steps, ftp);
-    if (typeof estimated === 'number') {
-      return { planned_kJ: estimated, source: 'Estimated (steps)' };
-    }
+    if (typeof estimated === 'number') return { planned_kJ: estimated, source: 'Estimated (steps)' };
   }
 
   const fromIf = estimateFromIf(ftp, event.planned_intensity_factor, durationHr);
-  if (typeof fromIf === 'number') {
-    return { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
-  }
+  if (typeof fromIf === 'number') return { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
 
   const fromTss = estimateFromTss(ftp, event.planned_tss ?? (event as any).plannedTss, durationHr);
-  if (typeof fromTss === 'number') {
-    return { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
-  }
+  if (typeof fromTss === 'number') return { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
 
   return { planned_kJ: undefined, source: 'Estimated (IF/TSS)' };
 }
@@ -527,15 +429,11 @@ async function fetchStructuredFile(
   const detail = (await fetcher(`/athlete/${athleteId}/events/${event.id}`, 'json')) as
     | IntervalsEventDetail
     | undefined;
-  if (!detail) {
-    return undefined;
-  }
+  if (!detail) return undefined;
 
   const structured = detail.structuredWorkout ?? detail.steps ?? (detail as any).structured_workout;
   const parsedSteps = parseStructuredSteps(structured ?? detail.steps);
-  if (parsedSteps && parsedSteps.length > 0) {
-    return parsedSteps;
-  }
+  if (parsedSteps && parsedSteps.length > 0) return parsedSteps;
 
   const hasDownloadableFile = Boolean(
     detail.structured_workout_id ??
@@ -545,55 +443,37 @@ async function fetchStructuredFile(
       detail.workout_file?.id ??
       detail.files?.find((file) => file.ext === 'zwo' || file.type === 'structured'),
   );
-  if (!hasDownloadableFile) {
-    return undefined;
-  }
+  if (!hasDownloadableFile) return undefined;
 
-  const response = await fetcher(
-    `/athlete/${athleteId}/events/${event.id}/download.zwo?resolve=true`,
-    'text',
-  );
-  if (typeof response === 'string') {
-    return parseZwoSteps(response);
-  }
+  const response = await fetcher(`/athlete/${athleteId}/events/${event.id}/download.zwo?resolve=true`, 'text');
+  if (typeof response === 'string') return parseZwoSteps(response);
 
   return undefined;
 }
 
 export class IntervalsProvider implements PlannedWorkoutProvider {
   private readonly apiKey: string;
-
   private readonly debug?: IntervalsDebugLogger;
 
-  private athleteId?: number;
-
+  private athleteId?: number;   // allow 0 (me) explicitly
   private athleteFtp?: number;
 
-  constructor(
-    apiKey: string,
-    debug?: IntervalsDebugLogger,
-    options?: { athleteId?: number },
-  ) {
+  constructor(apiKey: string, debug?: IntervalsDebugLogger, options?: { athleteId?: number }) {
     this.apiKey = apiKey;
     this.debug = debug;
-    if (options?.athleteId && Number.isFinite(options.athleteId)) {
-      const rounded = Math.round(options.athleteId);
-      if (rounded > 0) {
-        this.athleteId = rounded;
-      }
+    if (options && Number.isFinite(options.athleteId as number)) {
+      const rounded = Math.round(options.athleteId as number);
+      // Allow 0 to mean "me" per Intervals.icu semantics
+      if (rounded >= 0) this.athleteId = rounded;
     }
   }
 
   private log(level: IntervalsDebugLevel, message: string, detail?: string): void {
-    if (this.debug) {
-      this.debug({ level, message, detail });
-    }
+    if (this.debug) this.debug({ level, message, detail });
   }
 
   private async fetchFromApi(path: string, responseType: 'json' | 'text' = 'json'): Promise<any> {
-    const url = path.startsWith('http')
-      ? new URL(path)
-      : new URL(normaliseApiPath(path), ICU_BASE_URL);
+    const url = path.startsWith('http') ? new URL(path) : new URL(normaliseApiPath(path), ICU_BASE_URL);
     const summaryPath = `${url.pathname}${url.search}`;
 
     this.log('info', `GET ${summaryPath}`, 'Sending request to Intervals.icu');
@@ -623,29 +503,28 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       if (response.status === 403) {
         if (/\/athlete\/\d+\/events/.test(summaryPath)) {
           guidance =
-            'Intervals.icu denied access to planned workouts (403). Ensure your API key allows planned workout access on Intervals.icu → Settings → API and that the athlete has shared planned workouts with you.';
+            'Access denied (403). Using a personal API key? Use Basic auth with username "API_KEY" and your key as the password. If using OAuth, the token must include CALENDAR:READ. Also ensure you have access to the requested athlete (use /athlete/0 for your own account).';
         } else {
           guidance =
-            'Intervals.icu rejected the request (403). Verify your API key permissions on Intervals.icu → Settings → API.';
+            'Access denied (403). Verify authentication: personal keys require Basic auth (username "API_KEY", password = key). For OAuth, include the necessary scopes and ensure athlete access.';
         }
+      } else if (response.status === 404) {
+        guidance = 'Resource not found (404). Check athlete ID, event ID, and path.';
       }
 
       this.log('error', summaryMessage, detail);
-
       if (guidance) {
         this.log('error', guidance, detail);
         throw new Error(
           `${guidance} (Original error: Intervals.icu request failed (${response.status}${statusText}) for GET ${summaryPath}${suffix})`,
         );
       }
-
       throw new Error(
         `Intervals.icu request failed (${response.status}${statusText}) for GET ${summaryPath}${suffix}`,
       );
     }
 
     this.log('info', `GET ${summaryPath} → ${response.status}`, response.statusText || undefined);
-
     return responseType === 'json' ? response.json() : response.text();
   }
 
@@ -659,9 +538,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   }
 
   private logLoadedAthlete(): void {
-    if (typeof this.athleteId !== 'number') {
-      return;
-    }
+    if (typeof this.athleteId !== 'number') return;
     this.log(
       'info',
       `Loaded athlete profile ${this.athleteId}`,
@@ -670,12 +547,13 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   }
 
   private async ensureAthlete(): Promise<void> {
-    if (typeof this.athleteId === 'number' && typeof this.athleteFtp === 'number') {
-      return;
-    }
-
+    // If caller provided an athleteId (including 0 = me), we can proceed without lookup.
     if (typeof this.athleteId === 'number') {
+      // If we already have ftp, we’re good; otherwise try refresh but don’t fail hard.
+      if (typeof this.athleteFtp === 'number') return;
       try {
+        // For 0 (me), profile lookup is not required. Skip to avoid 405s on /athlete.
+        if (this.athleteId === 0) return;
         this.log('info', `Refreshing athlete profile ${this.athleteId}`);
         await this.loadAthleteProfile(`/athlete/${this.athleteId}`);
         this.logLoadedAthlete();
@@ -686,6 +564,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       return;
     }
 
+    // No athleteId supplied—attempt automatic lookup (may 405).
     this.log('info', 'Loading Intervals.icu athlete profile');
     try {
       await this.loadAthleteProfile('/athlete');
@@ -694,7 +573,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       const detail = error instanceof Error ? error.message : undefined;
       if (error instanceof Error && /\b405\b/.test(error.message)) {
         const guidance =
-          'Intervals.icu rejected the automatic athlete lookup (405). Enter your athlete ID in Settings.';
+          'Intervals.icu rejected the automatic athlete lookup (405). Set your athlete ID in settings, or pass athleteId=0 to target your own account.';
         this.log('error', guidance, detail);
         throw new Error(`${guidance} (Original error: ${error.message})`);
       }
@@ -707,26 +586,17 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (typeof this.athleteId !== 'number') {
       throw new Error('Athlete ID is not loaded');
     }
-    const url = new URL(
-      normaliseApiPath(`athlete/${this.athleteId}/events.json`),
-      ICU_BASE_URL,
-    );
+    const url = new URL(normaliseApiPath(`athlete/${this.athleteId}/events.json`), ICU_BASE_URL);
     const oldest = extractDateParam(startISO);
     const newest = extractDateParam(endISO);
-    if (oldest) {
-      url.searchParams.set('oldest', oldest);
-    }
-    if (newest) {
-      url.searchParams.set('newest', newest);
-    }
+    if (oldest) url.searchParams.set('oldest', oldest);
+    if (newest) url.searchParams.set('newest', newest);
     url.searchParams.set('category', 'WORKOUT');
     return url.pathname + url.search;
   }
 
   private async loadStructuredSteps(event: IntervalsEventSummary): Promise<Step[] | undefined> {
-    if (typeof this.athleteId !== 'number') {
-      return undefined;
-    }
+    if (typeof this.athleteId !== 'number') return undefined;
     try {
       this.log('info', `Fetching structured workout for event ${event.id}`);
       return await fetchStructuredFile(this.fetchFromApi.bind(this), this.athleteId, event);
@@ -741,15 +611,11 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   async getPlannedWorkouts(startISO: string, endISO: string): Promise<PlannedWorkout[]> {
     this.log('info', 'Preparing to sync planned workouts', `${startISO} → ${endISO}`);
     await this.ensureAthlete();
-    if (typeof this.athleteId !== 'number') {
-      return [];
-    }
+    if (typeof this.athleteId !== 'number') return [];
 
     const path = this.buildEventsUrl(startISO, endISO);
     const events = (await this.fetchFromApi(path)) as IntervalsEventSummary[];
-    if (!Array.isArray(events)) {
-      return [];
-    }
+    if (!Array.isArray(events)) return [];
 
     this.log('info', `Received ${events.length} planned events`);
 
@@ -757,11 +623,9 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
 
     for (const event of events) {
       const start =
-        normaliseIso(event.start_date ?? event.start ?? event.start_time ?? event.start_date_local) ??
-        undefined;
-      if (!start) {
-        continue;
-      }
+        normaliseIso(event.start_date ?? event.start ?? event.start_time ?? event.start_date_local) ?? undefined;
+      if (!start) continue;
+
       const durationSeconds = secondsFromEvent(event);
       const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date);
       const steps = parseStructuredSteps(event.steps) ?? (await this.loadStructuredSteps(event));
@@ -788,16 +652,14 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       });
     }
 
-    const sorted = workouts.sort(
-      (a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime(),
-    );
+    const sorted = workouts.sort((a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime());
     this.log('info', `Prepared ${sorted.length} workouts for planner`);
     return sorted;
   }
 }
 
 export interface IntervalsProviderOptions {
-  athleteId?: number;
+  athleteId?: number; // allow 0 for “me”
 }
 
 export function createIntervalsProvider(
@@ -807,4 +669,3 @@ export function createIntervalsProvider(
 ): IntervalsProvider {
   return new IntervalsProvider(apiKey, debug, options);
 }
-
