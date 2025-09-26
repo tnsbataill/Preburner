@@ -212,7 +212,7 @@ function parseAthleteId(value: string): number | undefined {
   }
 
   const rounded = Math.round(numeric);
-  return rounded > 0 ? rounded : undefined;
+  return rounded >= 0 ? rounded : undefined;
 }
 
 function computeIntervalsRange(settings: IntervalsConnectionSettings): {
@@ -323,8 +323,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         if (connection.apiKey) {
           pushSyncLog('info', 'Intervals.icu API key detected');
           const parsedAthleteId = parseAthleteId(connection.athleteId);
-          if (parsedAthleteId) {
+          const resolvedAthleteId = typeof parsedAthleteId === 'number' ? parsedAthleteId : 0;
+          if (typeof parsedAthleteId === 'number') {
             pushSyncLog('info', 'Using provided athlete ID', String(parsedAthleteId));
+          } else {
+            pushSyncLog('info', 'Using current athlete (ID 0)');
           }
           pushSyncLog('info', 'Sync window selected', formatRangeDetail(startISO, endISO));
           const cached = await loadCachedWorkouts(startISO, endISO);
@@ -343,7 +346,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
               const provider = createIntervalsProvider(
                 connection.apiKey.trim(),
                 forwardIntervalsDebug,
-                { athleteId: parsedAthleteId },
+                { athleteId: resolvedAthleteId },
               );
               workouts = await provider.getPlannedWorkouts(startISO, endISO);
               dataSource = 'intervals';
@@ -469,11 +472,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
 
         if (connection.apiKey) {
           const parsedAthleteId = parseAthleteId(connection.athleteId);
-          if (parsedAthleteId) {
+          const resolvedAthleteId = typeof parsedAthleteId === 'number' ? parsedAthleteId : 0;
+          if (typeof parsedAthleteId === 'number') {
             pushSyncLog('info', 'Using provided athlete ID', String(parsedAthleteId));
+          } else {
+            pushSyncLog('info', 'Using current athlete (ID 0)');
           }
           const provider = createIntervalsProvider(connection.apiKey.trim(), forwardIntervalsDebug, {
-            athleteId: parsedAthleteId,
+            athleteId: resolvedAthleteId,
           });
           workouts = await provider.getPlannedWorkouts(startISO, endISO);
           dataSource = 'intervals';

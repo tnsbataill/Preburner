@@ -71,7 +71,7 @@ describe('IntervalsProvider', () => {
     const [profileUrl, profileInit] = fetchMock.mock.calls[0];
     expect(profileUrl.toString()).toBe('https://intervals.icu/api/v1/athlete/123');
     expect(profileInit?.headers).toMatchObject({
-      Authorization: `Basic ${Buffer.from('abc123:').toString('base64')}`,
+      Authorization: `Basic ${Buffer.from('API_KEY:abc123').toString('base64')}`,
       Accept: 'application/json',
     });
 
@@ -110,7 +110,7 @@ describe('IntervalsProvider', () => {
     await expect(
       provider.getPlannedWorkouts('2024-06-10T00:00:00.000Z', '2024-06-20T00:00:00.000Z'),
     ).rejects.toThrow(
-      'Intervals.icu rejected the automatic athlete lookup (405). Enter your athlete ID in Settings.',
+      /Intervals\.icu rejected the automatic athlete lookup \(405\)\. Set your athlete ID in settings, or pass athleteId=0 to target your own account\./,
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -147,7 +147,7 @@ describe('IntervalsProvider', () => {
     await expect(
       provider.getPlannedWorkouts('2024-06-10T00:00:00.000Z', '2024-06-20T00:00:00.000Z'),
     ).rejects.toThrow(
-      /Intervals\.icu denied access to planned workouts \(403\)\. Ensure your API key allows planned workout access on Intervals\.icu → Settings → API and that the athlete has shared planned workouts with you\./,
+      /Access denied \(403\)\. Using a personal API key\? Use Basic auth with username "API_KEY" and your key as the password\./,
     );
 
     const eventsCall = fetchMock.mock.calls.find(([url]) =>
