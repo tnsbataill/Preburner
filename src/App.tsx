@@ -5,6 +5,7 @@ import { OnboardingPage } from './pages/OnboardingPage.js';
 import { PlannerPage } from './pages/PlannerPage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
 import { WindowsPage } from './pages/WindowsPage.js';
+import { AthleteProfilePage } from './pages/AthleteProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { usePlannerStore } from './state/plannerStore.js';
 import type { PlannerPage as PlannerPageKey } from './state/types.js';
@@ -14,6 +15,7 @@ const pageDefinitions: { key: PlannerPageKey; label: string }[] = [
   { key: 'planner', label: 'Planner' },
   { key: 'windows', label: 'Windows' },
   { key: 'weekly', label: 'Weekly' },
+  { key: 'athlete', label: 'Athlete' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -33,6 +35,8 @@ function PageContent({ page }: { page: PlannerPageKey }) {
       return <WindowsPage />;
     case 'weekly':
       return <WeeklyPage />;
+    case 'athlete':
+      return <AthleteProfilePage />;
     case 'settings':
       return <SettingsPage />;
     case 'onboarding':

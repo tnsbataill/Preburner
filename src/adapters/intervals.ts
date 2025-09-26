@@ -456,6 +456,20 @@ function sumStepKilojoules(steps: Step[], ftp: number | undefined): number | und
   return total / 1000;
 }
 
+function totalStepDurationSeconds(steps: Step[] | undefined): number | undefined {
+  if (!steps || steps.length === 0) {
+    return undefined;
+  }
+  let total = 0;
+  for (const step of steps) {
+    const duration = Number(step.duration_s);
+    if (Number.isFinite(duration) && duration > 0) {
+      total += duration;
+    }
+  }
+  return total > 0 ? total : undefined;
+}
+
 function parseStructuredSteps(structured: unknown): Step[] | undefined {
   if (!structured) return undefined;
 
@@ -804,9 +818,8 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
         return;
       }
       try {
-        // For 0 (me), profile lookup is not required. Skip to avoid 405s on /athlete.
-        if (this.athleteId === 0) return;
-        this.log('info', `Refreshing athlete profile ${this.athleteId}`);
+        const label = this.athleteId === 0 ? 'current athlete (0)' : `athlete profile ${this.athleteId}`;
+        this.log('info', `Refreshing ${label}`);
         await this.loadAthleteProfile(`/athlete/${this.athleteId}`);
         this.logLoadedAthlete();
       } catch (error) {
@@ -926,9 +939,9 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
         normaliseIso(event.start_date ?? event.start ?? event.start_time ?? event.start_date_local) ?? undefined;
       if (!start) continue;
 
-      const durationSeconds = secondsFromEvent(event);
-      const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date);
       const steps = parseStructuredSteps(event.steps) ?? (await this.loadStructuredSteps(event));
+      const durationSeconds = secondsFromEvent(event) ?? totalStepDurationSeconds(steps);
+      const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date);
       const tags = extractTags(event.tags);
       const labels = Array.isArray(event.labels) ? event.labels.map((label) => String(label)) : [];
       const defaultType = mapTagsToDefaultType([...tags, ...labels], 'Endurance');
