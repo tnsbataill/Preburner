@@ -23,7 +23,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path.startsWith('/api/v1/athlete/123/events')) {
+      if (path.startsWith('/api/v1/athlete/123/events.json')) {
         return buildJsonResponse([
           {
             id: 42,
@@ -75,6 +75,11 @@ describe('IntervalsProvider', () => {
       Accept: 'application/json',
     });
 
+    const [eventsUrl] = fetchMock.mock.calls[1];
+    expect(eventsUrl.toString()).toBe(
+      'https://intervals.icu/api/v1/athlete/123/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+    );
+
     expect(debugSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         level: 'info',
@@ -121,7 +126,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path.startsWith('/api/v1/athlete/123/events')) {
+      if (path.startsWith('/api/v1/athlete/123/events.json')) {
         return new Response('Access denied', {
           status: 403,
           statusText: 'Forbidden',
@@ -145,8 +150,15 @@ describe('IntervalsProvider', () => {
       /Intervals\.icu denied access to planned workouts \(403\)\. Ensure your API key allows planned workout access on Intervals\.icu → Settings → API and that the athlete has shared planned workouts with you\./,
     );
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://intervals.icu/api/v1/athlete/123/events?start=2024-06-10T00%3A00%3A00.000Z&end=2024-06-20T00%3A00%3A00.000Z&category=WORKOUT',
+    const eventsCall = fetchMock.mock.calls.find(([url]) =>
+      url.toString().startsWith('https://intervals.icu/api/v1/athlete/123/events.json'),
+    );
+    expect(eventsCall).toBeDefined();
+    const [eventsUrl, eventsInit] = eventsCall!;
+    expect(eventsUrl.toString()).toBe(
+      'https://intervals.icu/api/v1/athlete/123/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+    );
+    expect(eventsInit).toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: expect.any(String) }),
       }),
