@@ -18,12 +18,12 @@ describe('IntervalsProvider', () => {
     vi.restoreAllMocks();
   });
 
-  it('fetches athlete profile and planned workouts using basic auth', async () => {
+  it('fetches planned workouts for personal API keys using basic auth and athlete 0', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path.startsWith('/api/v1/athlete/123/events.json')) {
+      if (path.startsWith('/api/v1/athlete/0/events.json')) {
         return buildJsonResponse([
           {
             id: 42,
@@ -41,17 +41,13 @@ describe('IntervalsProvider', () => {
         ]);
       }
 
-      if (path.startsWith('/api/v1/athlete/123')) {
-        return buildJsonResponse({ id: 123, ftp: 255 });
-      }
-
       throw new Error(`Unexpected fetch to ${path}`);
     });
 
     vi.stubGlobal('fetch', fetchMock);
 
     const debugSpy = vi.fn();
-    const provider = createIntervalsProvider('abc123', debugSpy, { athleteId: 123 });
+    const provider = createIntervalsProvider('abc123', debugSpy, { athleteId: 0 });
 
     const workouts = await provider.getPlannedWorkouts(
       '2024-06-10T00:00:00.000Z',
@@ -67,23 +63,20 @@ describe('IntervalsProvider', () => {
     expect(workout.kj_source).toBe('ICU Structured');
     expect(workout.steps).toHaveLength(2);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [profileUrl, profileInit] = fetchMock.mock.calls[0];
-    expect(profileUrl.toString()).toBe('https://intervals.icu/api/v1/athlete/123');
-    expect(profileInit?.headers).toMatchObject({
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [eventsUrl, eventsInit] = fetchMock.mock.calls[0];
+    expect(eventsUrl.toString()).toBe(
+      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+    );
+    expect(eventsInit?.headers).toMatchObject({
       Authorization: `Basic ${Buffer.from('API_KEY:abc123').toString('base64')}`,
       Accept: 'application/json',
     });
 
-    const [eventsUrl] = fetchMock.mock.calls[1];
-    expect(eventsUrl.toString()).toBe(
-      'https://intervals.icu/api/v1/athlete/123/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
-    );
-
     expect(debugSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         level: 'info',
-        message: expect.stringContaining('Loaded athlete profile'),
+        message: expect.stringContaining('Prepared 1 workouts for planner'),
       }),
     );
   });
@@ -126,15 +119,11 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path.startsWith('/api/v1/athlete/123/events.json')) {
+      if (path.startsWith('/api/v1/athlete/0/events.json')) {
         return new Response('Access denied', {
           status: 403,
           statusText: 'Forbidden',
         });
-      }
-
-      if (path === '/api/v1/athlete/123') {
-        return buildJsonResponse({ id: 123, ftp: 250 });
       }
 
       throw new Error(`Unexpected fetch to ${path}`);
@@ -142,7 +131,7 @@ describe('IntervalsProvider', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const provider = createIntervalsProvider('abc123', undefined, { athleteId: 123 });
+    const provider = createIntervalsProvider('abc123', undefined, { athleteId: 0 });
 
     await expect(
       provider.getPlannedWorkouts('2024-06-10T00:00:00.000Z', '2024-06-20T00:00:00.000Z'),
@@ -151,12 +140,12 @@ describe('IntervalsProvider', () => {
     );
 
     const eventsCall = fetchMock.mock.calls.find(([url]) =>
-      url.toString().startsWith('https://intervals.icu/api/v1/athlete/123/events.json'),
+      url.toString().startsWith('https://intervals.icu/api/v1/athlete/0/events.json'),
     );
     expect(eventsCall).toBeDefined();
     const [eventsUrl, eventsInit] = eventsCall!;
     expect(eventsUrl.toString()).toBe(
-      'https://intervals.icu/api/v1/athlete/123/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
     );
     expect(eventsInit).toEqual(
       expect.objectContaining({
