@@ -87,7 +87,7 @@ describe('IntervalsProvider', () => {
     expect(eventsCall).toBeDefined();
     const [eventsUrl, eventsInit] = eventsCall!;
     expect(eventsUrl.toString()).toBe(
-      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT&resolve=true',
     );
     expect(eventsInit?.headers).toMatchObject({
       Authorization: `Basic ${Buffer.from('API_KEY:abc123').toString('base64')}`,
@@ -159,6 +159,58 @@ describe('IntervalsProvider', () => {
     expect(workout.kj_source).toBe('ICU Structured');
   });
 
+  it('uses workout_doc metadata and joules fields when structured steps are missing elsewhere', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const path = `${url.pathname}${url.search}`;
+
+      if (path === '/api/v1/athlete/0') {
+        return buildJsonResponse({ id: 0, ftp: 250 });
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
+        return buildJsonResponse([]);
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/events.json')) {
+        return buildJsonResponse([
+          {
+            id: 88,
+            title: 'Long Endurance',
+            start_date_local: '2024-08-02T06:00:00',
+            time_target: '5400',
+            joules: 720000,
+            workout_doc: {
+              steps: [
+                { duration: 1800, target_type: '%FTP', target_lo: 60, target_hi: 65 },
+                { duration: 1800, target_type: '%FTP', target_lo: 65, target_hi: 70 },
+                { duration: 1800, target_type: '%FTP', target_lo: 70, target_hi: 75 },
+              ],
+            },
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch to ${path}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createIntervalsProvider('abc123', undefined, { athleteId: 0 });
+
+    const workouts = await provider.getPlannedWorkouts(
+      '2024-08-01T00:00:00.000Z',
+      '2024-08-05T00:00:00.000Z',
+    );
+
+    expect(workouts).toHaveLength(1);
+    const [workout] = workouts;
+    expect(workout.duration_hr).toBeCloseTo(1.5);
+    expect(workout.planned_kJ).toBeCloseTo(720);
+    expect(workout.steps).toHaveLength(3);
+    expect(workout.endISO).not.toBe(workout.startISO);
+  });
+
   it('suggests entering athlete id when automatic lookup is rejected', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
@@ -227,7 +279,7 @@ describe('IntervalsProvider', () => {
     expect(eventsCall).toBeDefined();
     const [eventsUrl, eventsInit] = eventsCall!;
     expect(eventsUrl.toString()).toBe(
-      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT',
+      'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT&resolve=true',
     );
     expect(eventsInit).toEqual(
       expect.objectContaining({
