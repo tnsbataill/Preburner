@@ -76,12 +76,12 @@ interface IntervalsEventSummary {
   start_time?: string;
   end?: string;
   end_date?: string;
-  duration?: number;
-  planned_duration?: number;
-  planned_duration_total?: number;
-  planned_work_kj?: number;
-  planned_work?: number;
-  plannedWork?: number;
+  duration?: number | string;
+  planned_duration?: number | string;
+  planned_duration_total?: number | string;
+  planned_work_kj?: number | string;
+  planned_work?: number | string;
+  plannedWork?: number | string;
   plannedTrainingLoad?: number;
   planned_tss?: number;
   planned_intensity_factor?: number;
@@ -124,14 +124,12 @@ function normaliseIso(iso?: string): string | undefined {
 }
 
 function secondsFromEvent(event: IntervalsEventSummary): number | undefined {
-  if (typeof event.planned_duration_total === 'number' && event.planned_duration_total > 0) {
-    return event.planned_duration_total;
-  }
-  if (typeof event.planned_duration === 'number' && event.planned_duration > 0) {
-    return event.planned_duration;
-  }
-  if (typeof event.duration === 'number' && event.duration > 0) {
-    return event.duration;
+  const candidates = [event.planned_duration_total, event.planned_duration, event.duration];
+  for (const candidate of candidates) {
+    const seconds = toFiniteNumber(candidate);
+    if (typeof seconds === 'number' && seconds > 0) {
+      return seconds;
+    }
   }
   return undefined;
 }
@@ -621,8 +619,9 @@ function extractPlannedKilojoules(
 ): PlannedKilojoulesResult {
   const directCandidates = [event.planned_work_kj, event.planned_work, event.plannedWork];
   for (const candidate of directCandidates) {
-    if (typeof candidate === 'number' && candidate > 0) {
-      return { planned_kJ: candidate, source: 'ICU Structured' };
+    const parsed = toFiniteNumber(candidate);
+    if (typeof parsed === 'number' && parsed > 0) {
+      return { planned_kJ: parsed, source: 'ICU Structured' };
     }
   }
 
