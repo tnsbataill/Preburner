@@ -455,7 +455,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   private readonly apiKey: string;
   private readonly debug?: IntervalsDebugLogger;
 
-  private athleteId?: number;   // allow 0 (me) explicitly
+  private athleteId?: number; // allow 0 (me) explicitly
   private athleteFtp?: number;
 
   constructor(apiKey: string, debug?: IntervalsDebugLogger, options?: { athleteId?: number }) {
@@ -476,13 +476,17 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     const url = path.startsWith('http') ? new URL(path) : new URL(normaliseApiPath(path), ICU_BASE_URL);
     const summaryPath = `${url.pathname}${url.search}`;
 
-    this.log('info', `GET ${summaryPath}`, 'Sending request to Intervals.icu');
+    const passwordLength = this.apiKey.trim().length;
+    this.log('info', 'Auth check', `u=API_KEY passLen=${passwordLength}`);
+    this.log('info', 'GET', summaryPath);
+
+    const authorization = encodeBasicAuth(this.apiKey);
 
     let response: Response;
     try {
       response = await fetch(url.toString(), {
         headers: {
-          Authorization: encodeBasicAuth(this.apiKey),
+          Authorization: authorization,
           Accept: responseType === 'json' ? 'application/json' : 'text/plain',
         },
       });
