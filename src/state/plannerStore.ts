@@ -9,6 +9,7 @@ import {
 } from '../calc/weekly.js';
 import { sampleProfile } from '../samples/profile.js';
 import type {
+  EfficiencyPreset,
   PlannedWorkout,
   Profile,
   SessionType,
@@ -33,6 +34,13 @@ const SAMPLE_START_ISO = '2024-06-10T00:00:00.000Z';
 const SAMPLE_END_ISO = '2024-06-20T00:00:00.000Z';
 const DEFAULT_RANGE_DAYS = 7;
 
+const EFFICIENCY_PRESET_VALUES: Record<EfficiencyPreset, number> = {
+  WorldClass: 0.19,
+  Elite: 0.21,
+  Competitive: 0.23,
+  Enthusiast: 0.25,
+};
+
 interface IntervalsConnectionSettings {
   apiKey: string;
   startDateISO: string;
@@ -51,6 +59,10 @@ interface SyncLogEntry {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const KG_PER_LB = 0.45359237;
+
+type ExternalProfileUpdate = Partial<
+  Pick<Profile, 'sex' | 'age_years' | 'height_cm' | 'weight_kg' | 'ftp_watts' | 'useImperial'>
+>;
 
 export interface WeightTrendPoint {
   dateISO: string;
@@ -110,6 +122,20 @@ function cloneCarbSplit(split: Profile['carbSplit']): Profile['carbSplit'] {
   return { ...split };
 }
 
+function efficiencyFromPreset(preset: EfficiencyPreset): number {
+  return EFFICIENCY_PRESET_VALUES[preset] ?? sampleProfile.efficiency;
+}
+
+function resolvePresetForEfficiency(value: number): EfficiencyPreset | undefined {
+  const entries = Object.entries(EFFICIENCY_PRESET_VALUES) as [EfficiencyPreset, number][];
+  for (const [preset, presetValue] of entries) {
+    if (Math.abs(presetValue - value) < 0.0005) {
+      return preset;
+    }
+  }
+  return undefined;
+}
+
 function normalizeDateKey(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -126,24 +152,117 @@ function normalizeDateKey(input: string): string {
   return parsed.toISOString().slice(0, 10);
 }
 
+function normalizeWeightEntry(entry: WeightEntry): WeightEntry {
+  const normalizedSource: WeightEntry['source'] = entry.source === 'intervals' ? 'intervals' : 'manual';
+  return {
+    dateISO: normalizeDateKey(entry.dateISO),
+    weight_kg: entry.weight_kg,
+    source: normalizedSource,
+  };
+}
+
 function sortWeights(weights: WeightEntry[]): WeightEntry[] {
   return [...weights].sort((a, b) => {
-    const aMs = new Date(`${a.dateISO}T00:00:00Z`).getTime();
-    const bMs = new Date(`${b.dateISO}T00:00:00Z`).getTime();
+    const aMs = new Date(`${normalizeDateKey(a.dateISO)}T00:00:00Z`).getTime();
+    const bMs = new Date(`${normalizeDateKey(b.dateISO)}T00:00:00Z`).getTime();
     return aMs - bMs;
   });
 }
 
 function upsertWeightList(weights: WeightEntry[], entry: WeightEntry): WeightEntry[] {
-  const normalizedDate = normalizeDateKey(entry.dateISO);
-  const filtered = weights.filter((existing) => normalizeDateKey(existing.dateISO) !== normalizedDate);
-  filtered.push({ dateISO: normalizedDate, weight_kg: entry.weight_kg });
+  const normalized = normalizeWeightEntry(entry);
+  const filtered = weights.filter((existing) => normalizeDateKey(existing.dateISO) !== normalized.dateISO);
+  filtered.push(normalized);
   return sortWeights(filtered);
 }
 
 function removeWeightByDate(weights: WeightEntry[], dateISO: string): WeightEntry[] {
   const normalized = normalizeDateKey(dateISO);
-  return weights.filter((entry) => normalizeDateKey(entry.dateISO) !== normalized);
+  return weights.filter((entry) => {
+    if (normalizeDateKey(entry.dateISO) !== normalized) {
+      return true;
+    }
+    return entry.source === 'intervals';
+  });
+}
+
+function mergeImportedWeights(existing: WeightEntry[], imported: WeightEntry[]): WeightEntry[] {
+  if (imported.length === 0) {
+    return sortWeights(existing);
+  }
+
+  const manualDates = new Set(
+    existing
+      .filter((entry) => entry.source !== 'intervals')
+      .map((entry) => normalizeDateKey(entry.dateISO)),
+  );
+
+  const byDate = new Map<string, WeightEntry>();
+  for (const entry of existing) {
+    const normalized = normalizeWeightEntry(entry);
+    byDate.set(normalized.dateISO, normalized);
+  }
+
+  for (const entry of imported) {
+    const normalized = normalizeWeightEntry({ ...entry, source: 'intervals' });
+    if (manualDates.has(normalized.dateISO)) {
+      continue;
+    }
+    byDate.set(normalized.dateISO, normalized);
+  }
+
+  return sortWeights(Array.from(byDate.values()));
+}
+
+function latestWeightKg(weights: WeightEntry[]): number | undefined {
+  if (weights.length === 0) {
+    return undefined;
+  }
+  const sorted = sortWeights(weights);
+  return sorted[sorted.length - 1]?.weight_kg;
+}
+
+function cloneProfile(profile: Profile): Profile {
+  return {
+    ...profile,
+    carbBands: cloneCarbBands(profile.carbBands),
+    carbSplit: cloneCarbSplit(profile.carbSplit),
+    activityFactorOverrides: profile.activityFactorOverrides
+      ? { ...profile.activityFactorOverrides }
+      : undefined,
+  };
+}
+
+function applyExternalProfile(
+  base: Profile,
+  update?: ExternalProfileUpdate,
+  weightFallback?: number,
+): Profile {
+  const next = cloneProfile(base);
+  if (update) {
+    if (update.sex === 'M' || update.sex === 'F') {
+      next.sex = update.sex;
+    }
+    if (typeof update.age_years === 'number' && Number.isFinite(update.age_years)) {
+      next.age_years = Math.max(0, Math.round(update.age_years));
+    }
+    if (typeof update.height_cm === 'number' && Number.isFinite(update.height_cm)) {
+      next.height_cm = update.height_cm;
+    }
+    if (typeof update.weight_kg === 'number' && Number.isFinite(update.weight_kg)) {
+      next.weight_kg = update.weight_kg;
+    }
+    if (typeof update.ftp_watts === 'number' && Number.isFinite(update.ftp_watts)) {
+      next.ftp_watts = update.ftp_watts;
+    }
+    if (typeof update.useImperial === 'boolean') {
+      next.useImperial = update.useImperial;
+    }
+  }
+  if (typeof weightFallback === 'number' && Number.isFinite(weightFallback)) {
+    next.weight_kg = weightFallback;
+  }
+  return next;
 }
 
 function computeWeightTrend(weights: WeightEntry[]): WeightTrendPoint[] {
@@ -403,8 +522,8 @@ function shouldResetLastSync(key: keyof IntervalsConnectionSettings): boolean {
 }
 
 export const usePlannerStore = create<PlannerState>((set, get) => {
-  const baseProfile = { ...sampleProfile, carbBands: cloneCarbBands(sampleProfile.carbBands) };
-  const defaultOverrides = createDefaultOverrides(baseProfile);
+  const initialBaseProfile = cloneProfile(sampleProfile);
+  const defaultOverrides = createDefaultOverrides(initialBaseProfile);
   const defaultConnection = createDefaultConnection();
 
   const LOG_LIMIT = 50;
@@ -457,8 +576,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
   return {
     status: 'idle',
     page: 'onboarding',
-    baseProfile,
-    profile: applyOverrides(baseProfile, defaultOverrides),
+    baseProfile: initialBaseProfile,
+    profile: applyOverrides(initialBaseProfile, defaultOverrides),
     overrides: defaultOverrides,
     workouts: [],
     windows: [],
@@ -491,13 +610,15 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         const overrides = mergeOverrides(defaultOverrides, storedOverrides);
         const connection = mergeConnectionSettings(defaultConnection, storedConnection);
         const { startISO, endISO } = computeIntervalsRange(connection);
-        const weights = sortWeights(storedWeights ?? []);
-        const weightTrend = computeWeightTrend(weights);
+        let weights = sortWeights((storedWeights ?? []).map(normalizeWeightEntry));
+        let weightTrend = computeWeightTrend(weights);
 
         let workouts: PlannedWorkout[] = [];
         let dataSource: PlannerDataSource = 'sample';
         let lastSyncISO: string | undefined;
         let syncError: string | undefined;
+        let importedWeights: WeightEntry[] = [];
+        let externalProfile: ExternalProfileUpdate | undefined;
 
         if (connection.apiKey) {
           pushSyncLog('info', 'Intervals.icu API key detected');
@@ -528,6 +649,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
                 { athleteId: resolvedAthleteId },
               );
               workouts = await provider.getPlannedWorkouts(startISO, endISO);
+              const context = provider.getLatestAthleteContext?.();
+              if (context) {
+                importedWeights = context.weights ?? [];
+                externalProfile = context.profile ?? externalProfile;
+              }
               dataSource = 'intervals';
               lastSyncISO = new Date().toISOString();
               await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
@@ -553,8 +679,15 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           }
         }
 
+        if (importedWeights.length > 0) {
+          weights = mergeImportedWeights(weights, importedWeights);
+          weightTrend = computeWeightTrend(weights);
+        }
+
+        const latestKg = latestWeightKg(weights);
+        const baseProfileForPlan = applyExternalProfile(initialBaseProfile, externalProfile, latestKg);
         const { profile, windows, weekly, weightSummary } = recomputePlan(
-          baseProfile,
+          baseProfileForPlan,
           overrides,
           workouts,
           weights,
@@ -569,12 +702,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           weights,
           weightTrend,
           weightSummary,
+          baseProfile: baseProfileForPlan,
           connection,
           dataSource,
           lastSyncISO,
           syncError,
           error: undefined,
         });
+        void persistWeights(weights);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error loading plan';
         set({ status: 'error', error: message });
@@ -586,7 +721,27 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     },
     updateOverride(key, value) {
       const state = get();
-      const overrides = { ...state.overrides, [key]: value } as PlannerOverrides;
+      let overrides: PlannerOverrides;
+      if (key === 'efficiencyPreset') {
+        const preset = value as EfficiencyPreset;
+        overrides = {
+          ...state.overrides,
+          efficiencyPreset: preset,
+          efficiency: efficiencyFromPreset(preset),
+        } as PlannerOverrides;
+      } else if (key === 'efficiency') {
+        const numeric = typeof value === 'number' ? value : Number(value);
+        overrides = {
+          ...state.overrides,
+          efficiency: Number.isFinite(numeric) ? numeric : state.overrides.efficiency,
+        } as PlannerOverrides;
+        const matched = resolvePresetForEfficiency(overrides.efficiency);
+        if (matched) {
+          overrides.efficiencyPreset = matched;
+        }
+      } else {
+        overrides = { ...state.overrides, [key]: value } as PlannerOverrides;
+      }
       const { profile, windows, weekly, weightSummary } = recomputePlan(
         state.baseProfile,
         overrides,
@@ -636,7 +791,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       const state = get();
       const updated: IntervalsConnectionSettings = { ...state.connection };
       if (key === 'apiKey') {
-        updated.apiKey = String(value ?? '');
+        const next = String(value ?? '');
+        const trimmed = next.trim();
+        const hadKey = Boolean(state.connection.apiKey.trim());
+        updated.apiKey = next;
+        if (!hadKey && trimmed) {
+          updated.rangeDays = DEFAULT_RANGE_DAYS;
+        }
       } else if (key === 'startDateISO') {
         updated.startDateISO = String(value ?? '');
       } else if (key === 'rangeDays') {
@@ -671,6 +832,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         let workouts: PlannedWorkout[];
         let dataSource: PlannerDataSource;
         let lastSyncISO: string | undefined;
+        let importedWeights: WeightEntry[] = [];
+        let externalProfile: ExternalProfileUpdate | undefined;
+        let weights = state.weights;
 
         if (connection.apiKey) {
           const parsedAthleteId = parseAthleteId(connection.athleteId);
@@ -684,6 +848,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
             athleteId: resolvedAthleteId,
           });
           workouts = await provider.getPlannedWorkouts(startISO, endISO);
+          const context = provider.getLatestAthleteContext?.();
+          if (context) {
+            importedWeights = context.weights ?? [];
+            externalProfile = context.profile ?? externalProfile;
+          }
           dataSource = 'intervals';
           lastSyncISO = new Date().toISOString();
           await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
@@ -700,11 +869,18 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           pushSyncLog('info', 'Intervals.icu API key not configured', 'Using sample data.');
         }
 
+        if (importedWeights.length > 0) {
+          weights = mergeImportedWeights(weights, importedWeights);
+        }
+
+        const weightTrend = computeWeightTrend(weights);
+        const latestKg = latestWeightKg(weights);
+        const baseProfileForPlan = applyExternalProfile(state.baseProfile, externalProfile, latestKg);
         const { profile, windows, weekly, weightSummary } = recomputePlan(
-          state.baseProfile,
+          baseProfileForPlan,
           overrides,
           workouts,
-          state.weights,
+          weights,
         );
         set({
           workouts,
@@ -712,6 +888,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           windows,
           weekly,
           weightSummary,
+          weights,
+          weightTrend,
+          baseProfile: baseProfileForPlan,
           dataSource,
           lastSyncISO,
           status: 'ready',
@@ -719,6 +898,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           syncError: undefined,
           isRefreshing: false,
         });
+        void persistWeights(weights);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to refresh workouts';
         pushSyncLog('error', message);
@@ -742,16 +922,19 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         const nextWeights = upsertWeightList(state.weights, {
           dateISO: normalizedDate,
           weight_kg: weightKg,
+          source: 'manual',
         });
+        const nextBase = applyExternalProfile(state.baseProfile, undefined, latestWeightKg(nextWeights));
         const weightTrend = computeWeightTrend(nextWeights);
         const { profile, windows, weekly, weightSummary } = recomputePlan(
-          state.baseProfile,
+          nextBase,
           state.overrides,
           state.workouts,
           nextWeights,
         );
         persisted = nextWeights;
         return {
+          baseProfile: nextBase,
           weights: nextWeights,
           weightTrend,
           profile,
@@ -767,16 +950,25 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     deleteWeightEntry(dateISO) {
       let persisted: WeightEntry[] | undefined;
       set((state) => {
+        const normalized = normalizeDateKey(dateISO);
+        const hasManual = state.weights.some(
+          (entry) => normalizeDateKey(entry.dateISO) === normalized && entry.source !== 'intervals',
+        );
+        if (!hasManual) {
+          return {};
+        }
         const nextWeights = removeWeightByDate(state.weights, dateISO);
+        const nextBase = applyExternalProfile(state.baseProfile, undefined, latestWeightKg(nextWeights));
         const weightTrend = computeWeightTrend(nextWeights);
         const { profile, windows, weekly, weightSummary } = recomputePlan(
-          state.baseProfile,
+          nextBase,
           state.overrides,
           state.workouts,
           nextWeights,
         );
         persisted = nextWeights;
         return {
+          baseProfile: nextBase,
           weights: nextWeights,
           weightTrend,
           profile,

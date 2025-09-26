@@ -1,10 +1,11 @@
 // intervals.ts — corrected Intervals.icu provider
 
-import type { PlannedWorkout, SessionType, Step } from '../types.js';
+import type { PlannedWorkout, SessionType, Step, WeightEntry } from '../types.js';
 import type { PlannedWorkoutProvider } from './provider.js';
 
 const ICU_BASE_URL = 'https://intervals.icu/api/v1/';
 const ICU_API_PREFIX = 'api/v1/';
+const KG_PER_LB = 0.45359237;
 
 export type IntervalsDebugLevel = 'info' | 'warn' | 'error';
 
@@ -18,7 +19,44 @@ type IntervalsDebugLogger = (entry: IntervalsDebugEntry) => void;
 
 interface IntervalsAthleteResponse {
   id: number;
-  ftp?: number;
+  ftp?: number | string;
+  weight?: number | string;
+  weight_kg?: number | string;
+  weightKg?: number | string;
+  weight_lb?: number | string;
+  weightLb?: number | string;
+  height?: number | string;
+  height_cm?: number | string;
+  heightCm?: number | string;
+  height_ft?: number | string;
+  heightFt?: number | string;
+  height_in?: number | string;
+  heightIn?: number | string;
+  sex?: string;
+  gender?: string;
+  birth_date?: string;
+  birthDate?: string;
+  dob?: string;
+  units?: string;
+  unit?: string;
+  unit_system?: string;
+  preferred_units?: string;
+  use_imperial?: boolean;
+  useImperial?: boolean;
+}
+
+interface IntervalsAthleteProfile {
+  sex?: 'M' | 'F';
+  age_years?: number;
+  height_cm?: number;
+  weight_kg?: number;
+  ftp_watts?: number;
+  useImperial?: boolean;
+}
+
+interface IntervalsAthleteContext {
+  profile?: IntervalsAthleteProfile;
+  weights?: WeightEntry[];
 }
 
 type IntervalsTagCollection = string[] | Record<string, unknown> | undefined;
@@ -104,20 +142,187 @@ function extractTags(collection: IntervalsTagCollection): string[] {
   return Object.keys(collection).map((key) => key);
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function parseSex(value: unknown): 'M' | 'F' | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return undefined;
+  if (normalized.startsWith('M')) return 'M';
+  if (normalized.startsWith('F')) return 'F';
+  return undefined;
+}
+
+function parseBirthDate(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return trimmed;
+}
+
+function computeAgeYears(birthDateISO: string): number | undefined {
+  const birthDate = new Date(birthDateISO);
+  if (Number.isNaN(birthDate.getTime())) return undefined;
+  const now = new Date();
+  let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - birthDate.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < birthDate.getUTCDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : undefined;
+}
+
+function parseUseImperial(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const lowered = value.trim().toLowerCase();
+    if (!lowered) return undefined;
+    if (lowered.includes('imperial') || lowered === 'us') {
+      return true;
+    }
+    if (lowered.includes('metric') || lowered === 'si') {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function parseWeightFromAthlete(athlete: IntervalsAthleteResponse): number | undefined {
+  const candidates: { value: unknown; unit: 'kg' | 'lb' }[] = [
+    { value: athlete.weight_kg, unit: 'kg' },
+    { value: athlete.weightKg, unit: 'kg' },
+    { value: athlete.weight, unit: 'kg' },
+    { value: athlete.weight_lb, unit: 'lb' },
+    { value: athlete.weightLb, unit: 'lb' },
+  ];
+  for (const candidate of candidates) {
+    const numeric = toFiniteNumber(candidate.value);
+    if (typeof numeric === 'number' && numeric > 0) {
+      return candidate.unit === 'lb' ? numeric * KG_PER_LB : numeric;
+    }
+  }
+  return undefined;
+}
+
+function parseHeightFromAthlete(athlete: IntervalsAthleteResponse): number | undefined {
+  const cmCandidates = [athlete.height_cm, athlete.heightCm];
+  for (const candidate of cmCandidates) {
+    const numeric = toFiniteNumber(candidate);
+    if (typeof numeric === 'number' && numeric > 0) {
+      return numeric;
+    }
+  }
+
+  const rawHeight = toFiniteNumber(athlete.height);
+  if (typeof rawHeight === 'number' && rawHeight > 0) {
+    return rawHeight > 3 ? rawHeight : rawHeight * 100;
+  }
+
+  const feet = toFiniteNumber(athlete.height_ft ?? athlete.heightFt);
+  const inches = toFiniteNumber(athlete.height_in ?? athlete.heightIn);
+  if (typeof feet === 'number') {
+    const totalInches = feet * 12 + (typeof inches === 'number' ? inches : 0);
+    return totalInches > 0 ? totalInches * 2.54 : undefined;
+  }
+
+  return undefined;
+}
+
+function shiftDateKey(dateKey: string, offsetDays: number): string {
+  const reference = new Date(`${dateKey}T00:00:00Z`);
+  if (Number.isNaN(reference.getTime())) {
+    return dateKey;
+  }
+  reference.setUTCDate(reference.getUTCDate() + offsetDays);
+  return reference.toISOString().slice(0, 10);
+}
+
+function parseWeightSeries(response: unknown): WeightEntry[] {
+  const entries = new Map<string, number>();
+
+  const addEntry = (dateValue: unknown, weightValue: unknown) => {
+    const dateKey = extractDateParam(typeof dateValue === 'string' ? dateValue : undefined);
+    const weight = toFiniteNumber(weightValue);
+    if (!dateKey || typeof weight !== 'number' || weight <= 0) {
+      return;
+    }
+    entries.set(dateKey, weight);
+  };
+
+  if (Array.isArray(response)) {
+    for (const item of response) {
+      if (item && typeof item === 'object') {
+        const record = item as Record<string, unknown>;
+        addEntry(record.date ?? record.d ?? record.day ?? record.start, record.value ?? record.v ?? record.weight);
+      }
+    }
+  } else if (response && typeof response === 'object') {
+    for (const [key, value] of Object.entries(response as Record<string, unknown>)) {
+      if (typeof value === 'number' || typeof value === 'string') {
+        addEntry(key, value);
+      } else if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        addEntry(record.date ?? record.d ?? key, record.value ?? record.v ?? record.weight);
+      }
+    }
+  }
+
+  return Array.from(entries.entries())
+    .map(([dateISO, weight_kg]) => ({ dateISO, weight_kg, source: 'intervals' as const }))
+    .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
+}
+
 function inferSessionType(
   name: string,
   tags: string[],
+  labels: string[],
+  typeHints: (string | undefined)[],
   steps: Step[] | undefined,
   defaultType: SessionType,
 ): SessionType {
-  const lowered = name.toLowerCase();
-  const tagString = tags.map((tag) => tag.toLowerCase()).join(' ');
+  const combined = [name, ...tags, ...labels, ...typeHints.filter((hint): hint is string => typeof hint === 'string')]
+    .map((value) => value.toLowerCase())
+    .join(' ');
 
-  if (tagString.includes('rest') || lowered.includes('rest day') || lowered.includes('off bike')) return 'Rest';
-  if (tagString.includes('race') || lowered.includes('race') || lowered.includes('crits')) return 'Race';
-  if (lowered.includes('vo2') || lowered.includes('v02') || tagString.includes('vo2')) return 'VO2';
-  if (lowered.includes('threshold') || lowered.includes('sweet spot') || lowered.includes('sweetspot')) return 'Threshold';
-  if (lowered.includes('tempo') || tagString.includes('tempo')) return 'Tempo';
+  if (
+    combined.includes('rest') ||
+    combined.includes('off bike') ||
+    combined.includes('recovery day') ||
+    combined.includes('day off')
+  )
+    return 'Rest';
+  if (combined.includes('race') || combined.includes('crits') || combined.includes('time trial')) return 'Race';
+  if (
+    combined.includes('vo2') ||
+    combined.includes('v02') ||
+    combined.includes('max aerobic') ||
+    combined.includes('anaerobic')
+  )
+    return 'VO2';
+  if (
+    combined.includes('threshold') ||
+    combined.includes('sweet spot') ||
+    combined.includes('sweetspot') ||
+    combined.includes('over under') ||
+    combined.includes('over-under')
+  )
+    return 'Threshold';
+  if (combined.includes('tempo') || combined.includes('steady state')) return 'Tempo';
+  if (combined.includes('endurance') || combined.includes('aerobic') || combined.includes('z2')) return 'Endurance';
+  if (combined.includes('recovery ride') || combined.includes('easy spin')) return 'Endurance';
 
   const maxPct = steps?.reduce((max, step) => {
     if (step.target_type === '%FTP') {
@@ -130,7 +335,7 @@ function inferSessionType(
 
   if (maxPct && maxPct >= 115) return 'VO2';
   if (maxPct && maxPct >= 100) return 'Threshold';
-  if (lowered.includes('recovery')) return 'Endurance';
+  if (combined.includes('recovery')) return 'Endurance';
 
   return defaultType;
 }
@@ -457,6 +662,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
 
   private athleteId?: number; // allow 0 (me) explicitly
   private athleteFtp?: number;
+  private latestContext?: IntervalsAthleteContext;
 
   constructor(apiKey: string, debug?: IntervalsDebugLogger, options?: { athleteId?: number }) {
     this.apiKey = apiKey;
@@ -470,6 +676,24 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
 
   private log(level: IntervalsDebugLevel, message: string, detail?: string): void {
     if (this.debug) this.debug({ level, message, detail });
+  }
+
+  private updateLatestProfile(update: IntervalsAthleteProfile): void {
+    const entries = Object.entries(update).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) {
+      return;
+    }
+    if (!this.latestContext) {
+      this.latestContext = {};
+    }
+    const current = this.latestContext.profile ?? {};
+    this.latestContext.profile = {
+      ...current,
+      ...(entries as [keyof IntervalsAthleteProfile, any][]).reduce<IntervalsAthleteProfile>((acc, [key, value]) => {
+        acc[key] = value;
+        return acc;
+      }, {} as IntervalsAthleteProfile),
+    };
   }
 
   private async fetchFromApi(path: string, responseType: 'json' | 'text' = 'json'): Promise<any> {
@@ -538,7 +762,28 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       throw new Error('Unable to load Intervals.icu athlete profile');
     }
     this.athleteId = athlete.id;
-    this.athleteFtp = typeof athlete.ftp === 'number' ? athlete.ftp : undefined;
+    const ftp = toFiniteNumber(athlete.ftp);
+    if (typeof ftp === 'number') {
+      this.athleteFtp = ftp;
+    }
+
+    const weightKg = parseWeightFromAthlete(athlete);
+    const heightCm = parseHeightFromAthlete(athlete);
+    const sex = parseSex(athlete.sex ?? athlete.gender);
+    const birthDate = parseBirthDate(athlete.birth_date ?? athlete.birthDate ?? athlete.dob);
+    const ageYears = birthDate ? computeAgeYears(birthDate) : undefined;
+    const useImperial = parseUseImperial(
+      athlete.use_imperial ?? athlete.useImperial ?? athlete.units ?? athlete.unit ?? athlete.unit_system ?? athlete.preferred_units,
+    );
+
+    this.updateLatestProfile({
+      ftp_watts: typeof ftp === 'number' ? ftp : undefined,
+      weight_kg: weightKg,
+      height_cm: heightCm,
+      sex,
+      age_years: ageYears,
+      useImperial,
+    });
   }
 
   private logLoadedAthlete(): void {
@@ -554,7 +799,10 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     // If caller provided an athleteId (including 0 = me), we can proceed without lookup.
     if (typeof this.athleteId === 'number') {
       // If we already have ftp, we’re good; otherwise try refresh but don’t fail hard.
-      if (typeof this.athleteFtp === 'number') return;
+      if (typeof this.athleteFtp === 'number') {
+        this.updateLatestProfile({ ftp_watts: this.athleteFtp });
+        return;
+      }
       try {
         // For 0 (me), profile lookup is not required. Skip to avoid 405s on /athlete.
         if (this.athleteId === 0) return;
@@ -612,10 +860,58 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     }
   }
 
+  private async loadWeightHistory(startISO: string, endISO: string): Promise<WeightEntry[]> {
+    if (typeof this.athleteId !== 'number') {
+      return [];
+    }
+
+    const newest = extractDateParam(endISO) ?? extractDateParam(startISO) ?? new Date().toISOString().slice(0, 10);
+    const oldestBase = extractDateParam(startISO) ?? newest;
+    const oldest = shiftDateKey(oldestBase, -60);
+    const query = `oldest=${oldest}&newest=${newest}&dir=asc`;
+    const candidates = [
+      `/athlete/${this.athleteId}/metrics/weight?${query}`,
+      `/athlete/${this.athleteId}/metrics/weight.json?${query}`,
+      `/athlete/${this.athleteId}/body?${query}`,
+    ];
+
+    for (const path of candidates) {
+      try {
+        const response = await this.fetchFromApi(path);
+        const weights = parseWeightSeries(response);
+        if (weights.length > 0) {
+          this.log('info', `Loaded ${weights.length} weight entries`, `${oldest} → ${newest}`);
+          return weights;
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : undefined;
+        this.log('warn', `Unable to load weight history from ${path}`, detail);
+      }
+    }
+
+    return [];
+  }
+
   async getPlannedWorkouts(startISO: string, endISO: string): Promise<PlannedWorkout[]> {
     this.log('info', 'Preparing to sync planned workouts', `${startISO} → ${endISO}`);
     await this.ensureAthlete();
     if (typeof this.athleteId !== 'number') return [];
+
+    this.latestContext = this.latestContext?.profile ? { profile: { ...this.latestContext.profile } } : {};
+
+    try {
+      const weights = await this.loadWeightHistory(startISO, endISO);
+      if (weights.length > 0) {
+        this.latestContext = this.latestContext ?? {};
+        this.latestContext.weights = weights;
+        const latestWeight = weights[weights.length - 1]?.weight_kg;
+        if (typeof latestWeight === 'number') {
+          this.updateLatestProfile({ weight_kg: latestWeight });
+        }
+      }
+    } catch {
+      // loadWeightHistory already logs warnings; continue without blocking workouts
+    }
 
     const path = this.buildEventsUrl(startISO, endISO);
     const events = (await this.fetchFromApi(path)) as IntervalsEventSummary[];
@@ -634,11 +930,22 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date);
       const steps = parseStructuredSteps(event.steps) ?? (await this.loadStructuredSteps(event));
       const tags = extractTags(event.tags);
-      const defaultType = mapTagsToDefaultType(tags, 'Endurance');
+      const labels = Array.isArray(event.labels) ? event.labels.map((label) => String(label)) : [];
+      const defaultType = mapTagsToDefaultType([...tags, ...labels], 'Endurance');
       const sessionName = event.title ?? event.name ?? 'Workout';
-      const inferredType = inferSessionType(sessionName, tags, steps, defaultType);
+      const inferredType = inferSessionType(
+        sessionName,
+        tags,
+        labels,
+        [event.type, event.workout_type, event.sport, event.category, event.description],
+        steps,
+        defaultType,
+      );
       const ftp = event.ftp_override ?? event.ftp ?? this.athleteFtp;
       const durationHr = ensureDurationHours(durationSeconds, start, end);
+      if (typeof ftp === 'number') {
+        this.updateLatestProfile({ ftp_watts: ftp });
+      }
       const { planned_kJ, source } = extractPlannedKilojoules(event, steps, ftp, durationHr);
 
       workouts.push({
@@ -659,6 +966,17 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     const sorted = workouts.sort((a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime());
     this.log('info', `Prepared ${sorted.length} workouts for planner`);
     return sorted;
+  }
+
+  getLatestAthleteContext(): IntervalsAthleteContext | undefined {
+    if (!this.latestContext) {
+      return undefined;
+    }
+    const profile = this.latestContext.profile ? { ...this.latestContext.profile } : undefined;
+    const weights = this.latestContext.weights
+      ? this.latestContext.weights.map((entry) => ({ ...entry }))
+      : undefined;
+    return { profile, weights };
   }
 }
 
