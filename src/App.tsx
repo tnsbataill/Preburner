@@ -1,10 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { SettingsPanel } from './components/SettingsPanel.js';
+import { WeightTracker } from './components/WeightTracker.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { PlannerPage } from './pages/PlannerPage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
 import { WindowsPage } from './pages/WindowsPage.js';
-import { usePlannerStore } from './state/plannerStoreOld.js';
+import { usePlannerStore } from './state/plannerStore.js';
 import type { PlannerPage as PlannerPageKey } from './state/types.js';
 
 const pageDefinitions: { key: PlannerPageKey; label: string }[] = [
@@ -105,7 +106,10 @@ export default function App() {
           <div className="lg:w-80">
             <SettingsPanel />
           </div>
-          <main className="flex-1">{content}</main>
+          <main className="flex-1 space-y-6">
+            <WeightTracker />
+            {content}
+          </main>
         </div>
       </div>
     </div>

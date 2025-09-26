@@ -1,4 +1,4 @@
-import { usePlannerStore } from '../state/plannerStoreOld.js';
+import { usePlannerStore } from '../state/plannerStore.js';
 
 export function OnboardingPage() {
   const profile = usePlannerStore((state) => state.profile);
