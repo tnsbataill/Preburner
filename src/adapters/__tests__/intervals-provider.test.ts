@@ -33,10 +33,10 @@ describe('IntervalsProvider', () => {
         });
       }
 
-      if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
         return buildJsonResponse([
-          { date: '2024-06-01', value: 70.4 },
-          { date: '2024-06-05', value: 70.1 },
+          { date: '2024-06-01', weight: 70.4 },
+          { date: '2024-06-05', weight: 70.1 },
         ]);
       }
 
@@ -116,7 +116,7 @@ describe('IntervalsProvider', () => {
         return buildJsonResponse({ id: '0', ftp: 250 });
       }
 
-      if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
         return buildJsonResponse([]);
       }
 
@@ -197,7 +197,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path.startsWith('/api/v1/athlete/0/metrics/weight')) {
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
         return buildJsonResponse([]);
       }
 
