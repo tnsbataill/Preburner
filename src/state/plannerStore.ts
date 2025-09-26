@@ -2,7 +2,11 @@ import { create } from 'zustand';
 import { createFakeProvider } from '../adapters/fake.js';
 import { createIntervalsProvider, type IntervalsDebugEntry } from '../adapters/intervals.js';
 import { buildWindows } from '../calc/prescribe.js';
-import { allocateWeeklyDeficits } from '../calc/weekly.js';
+import {
+  WINDOW_EMPTY_FLAG,
+  WINDOW_UNDER_RECOVERY_FLAG,
+  allocateWeeklyDeficits,
+} from '../calc/weekly.js';
 import { sampleProfile } from '../samples/profile.js';
 import type {
   PlannedWorkout,
@@ -10,6 +14,7 @@ import type {
   SessionType,
   WindowPlan,
   WeeklyPlan,
+  WeightEntry,
 } from '../types.js';
 import {
   loadCachedWorkouts,
@@ -18,13 +23,15 @@ import {
   persistCachedWorkouts,
   persistIntervalsSettings,
   persistOverrides,
+  loadStoredWeights,
+  persistWeights,
   type StoredIntervalsSettings,
 } from './storage.js';
 import type { PlannerOverrides, PlannerPage, PlannerStatus } from './types.js';
 
 const SAMPLE_START_ISO = '2024-06-10T00:00:00.000Z';
 const SAMPLE_END_ISO = '2024-06-20T00:00:00.000Z';
-const DEFAULT_RANGE_DAYS = 10;
+const DEFAULT_RANGE_DAYS = 7;
 
 interface IntervalsConnectionSettings {
   apiKey: string;
@@ -42,6 +49,23 @@ interface SyncLogEntry {
   detail?: string;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const KG_PER_LB = 0.45359237;
+
+export interface WeightTrendPoint {
+  dateISO: string;
+  weight_kg: number;
+  rollingAvg_kg?: number;
+}
+
+export interface WeightSummary {
+  startISO: string;
+  endISO: string;
+  days: number;
+  actualDeltaKg: number;
+  expectedDeltaKg: number;
+}
+
 interface PlannerState {
   status: PlannerStatus;
   error?: string;
@@ -53,6 +77,9 @@ interface PlannerState {
   workouts: PlannedWorkout[];
   windows: WindowPlan[];
   weekly: WeeklyPlan[];
+  weights: WeightEntry[];
+  weightTrend: WeightTrendPoint[];
+  weightSummary?: WeightSummary;
   connection: IntervalsConnectionSettings;
   dataSource: PlannerDataSource;
   lastSyncISO?: string;
@@ -68,6 +95,8 @@ interface PlannerState {
     value: IntervalsConnectionSettings[K],
   ): void;
   refreshWorkouts(): Promise<void>;
+  upsertWeightEntry(dateISO: string, value: number, unit: 'kg' | 'lb'): void;
+  deleteWeightEntry(dateISO: string): void;
 }
 
 function cloneCarbBands(bands: Profile['carbBands']): Profile['carbBands'] {
@@ -79,6 +108,138 @@ function cloneCarbBands(bands: Profile['carbBands']): Profile['carbBands'] {
 
 function cloneCarbSplit(split: Profile['carbSplit']): Profile['carbSplit'] {
   return { ...split };
+}
+
+function normalizeDateKey(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    return match[1];
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  return parsed.toISOString().slice(0, 10);
+}
+
+function sortWeights(weights: WeightEntry[]): WeightEntry[] {
+  return [...weights].sort((a, b) => {
+    const aMs = new Date(`${a.dateISO}T00:00:00Z`).getTime();
+    const bMs = new Date(`${b.dateISO}T00:00:00Z`).getTime();
+    return aMs - bMs;
+  });
+}
+
+function upsertWeightList(weights: WeightEntry[], entry: WeightEntry): WeightEntry[] {
+  const normalizedDate = normalizeDateKey(entry.dateISO);
+  const filtered = weights.filter((existing) => normalizeDateKey(existing.dateISO) !== normalizedDate);
+  filtered.push({ dateISO: normalizedDate, weight_kg: entry.weight_kg });
+  return sortWeights(filtered);
+}
+
+function removeWeightByDate(weights: WeightEntry[], dateISO: string): WeightEntry[] {
+  const normalized = normalizeDateKey(dateISO);
+  return weights.filter((entry) => normalizeDateKey(entry.dateISO) !== normalized);
+}
+
+function computeWeightTrend(weights: WeightEntry[]): WeightTrendPoint[] {
+  const sorted = sortWeights(weights);
+  return sorted.map((entry, index) => {
+    const currentDate = new Date(`${entry.dateISO}T00:00:00Z`);
+    const windowStart = currentDate.getTime() - 6 * MS_PER_DAY;
+    let sum = 0;
+    let count = 0;
+    for (let j = index; j >= 0; j -= 1) {
+      const candidate = sorted[j];
+      const candidateMs = new Date(`${candidate.dateISO}T00:00:00Z`).getTime();
+      if (candidateMs < windowStart) {
+        break;
+      }
+      sum += candidate.weight_kg;
+      count += 1;
+    }
+    const rolling = count > 0 ? sum / count : entry.weight_kg;
+    return { dateISO: entry.dateISO, weight_kg: entry.weight_kg, rollingAvg_kg: rolling };
+  });
+}
+
+function computeWeightSummary(profile: Profile, weights: WeightEntry[]): WeightSummary | undefined {
+  if (weights.length < 2) {
+    return undefined;
+  }
+  const sorted = sortWeights(weights);
+  const latest = sorted[sorted.length - 1];
+  const latestDate = new Date(`${latest.dateISO}T00:00:00Z`);
+  const windowStart = latestDate.getTime() - 6 * MS_PER_DAY;
+  let baseline = sorted[sorted.length - 2];
+  for (let i = sorted.length - 2; i >= 0; i -= 1) {
+    const candidate = sorted[i];
+    const candidateMs = new Date(`${candidate.dateISO}T00:00:00Z`).getTime();
+    baseline = candidate;
+    if (candidateMs <= windowStart) {
+      break;
+    }
+  }
+  if (!baseline) {
+    return undefined;
+  }
+  const baselineDate = new Date(`${baseline.dateISO}T00:00:00Z`);
+  const days = Math.max(1, Math.round((latestDate.getTime() - baselineDate.getTime()) / MS_PER_DAY));
+  const actualDeltaKg = latest.weight_kg - baseline.weight_kg;
+  const expectedDeltaKg = (profile.targetKgPerWeek / 7) * days;
+  return {
+    startISO: baseline.dateISO,
+    endISO: latest.dateISO,
+    days,
+    actualDeltaKg,
+    expectedDeltaKg,
+  };
+}
+
+function findWindowAfterDate(windows: WindowPlan[], dateISO: string): WindowPlan | undefined {
+  if (windows.length === 0) {
+    return undefined;
+  }
+  const anchor = new Date(`${dateISO}T12:00:00Z`).getTime();
+  const match = windows.find((window) => new Date(window.windowEndISO).getTime() >= anchor);
+  return match ?? windows[windows.length - 1];
+}
+
+function applyWeightFlags(
+  windows: WindowPlan[],
+  weights: WeightEntry[],
+  summary?: WeightSummary,
+): void {
+  if (windows.length === 0 || weights.length === 0) {
+    return;
+  }
+  const sorted = sortWeights(weights);
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const current = sorted[i];
+    if (prev.dateISO === current.dateISO) {
+      continue;
+    }
+    const drop = prev.weight_kg - current.weight_kg;
+    if (drop >= 1) {
+      const window = findWindowAfterDate(windows, current.dateISO);
+      if (window && !window.notes.includes(WINDOW_EMPTY_FLAG)) {
+        window.notes.push(WINDOW_EMPTY_FLAG);
+      }
+    }
+  }
+
+  if (summary && summary.expectedDeltaKg < -0.1 && summary.actualDeltaKg > 0.25) {
+    const latest = sorted[sorted.length - 1];
+    const window = findWindowAfterDate(windows, latest.dateISO);
+    if (window && !window.notes.includes(WINDOW_UNDER_RECOVERY_FLAG)) {
+      window.notes.push(WINDOW_UNDER_RECOVERY_FLAG);
+    }
+  }
 }
 
 function createDefaultOverrides(profile: Profile): PlannerOverrides {
@@ -144,15 +305,18 @@ function recomputePlan(
   baseProfile: Profile,
   overrides: PlannerOverrides,
   workouts: PlannedWorkout[],
-): { profile: Profile; windows: WindowPlan[]; weekly: WeeklyPlan[] } {
+  weights: WeightEntry[],
+): { profile: Profile; windows: WindowPlan[]; weekly: WeeklyPlan[]; weightSummary?: WeightSummary } {
   const profile = applyOverrides(baseProfile, overrides);
+  const weightSummary = computeWeightSummary(profile, weights);
   if (workouts.length === 0) {
-    return { profile, windows: [], weekly: [] };
+    return { profile, windows: [], weekly: [], weightSummary };
   }
 
   const windows = buildWindows(profile, workouts);
+  applyWeightFlags(windows, weights, weightSummary);
   const { windows: adjusted, weekly } = allocateWeeklyDeficits(profile, windows, workouts);
-  return { profile, windows: adjusted, weekly };
+  return { profile, windows: adjusted, weekly, weightSummary };
 }
 
 function clampRangeDays(value: number): number {
@@ -299,6 +463,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     workouts: [],
     windows: [],
     weekly: [],
+    weights: [],
+    weightTrend: [],
+    weightSummary: undefined,
     connection: defaultConnection,
     dataSource: 'sample',
     lastSyncISO: undefined,
@@ -315,14 +482,17 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       resetSyncLog();
 
       try {
-        const [storedOverrides, storedConnection] = await Promise.all([
+        const [storedOverrides, storedConnection, storedWeights] = await Promise.all([
           loadStoredOverrides(),
           loadIntervalsSettings(),
+          loadStoredWeights(),
         ]);
 
         const overrides = mergeOverrides(defaultOverrides, storedOverrides);
         const connection = mergeConnectionSettings(defaultConnection, storedConnection);
         const { startISO, endISO } = computeIntervalsRange(connection);
+        const weights = sortWeights(storedWeights ?? []);
+        const weightTrend = computeWeightTrend(weights);
 
         let workouts: PlannedWorkout[] = [];
         let dataSource: PlannerDataSource = 'sample';
@@ -383,7 +553,12 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           }
         }
 
-        const { profile, windows, weekly } = recomputePlan(baseProfile, overrides, workouts);
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          baseProfile,
+          overrides,
+          workouts,
+          weights,
+        );
         set({
           status: 'ready',
           overrides,
@@ -391,6 +566,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           profile,
           windows,
           weekly,
+          weights,
+          weightTrend,
+          weightSummary,
           connection,
           dataSource,
           lastSyncISO,
@@ -409,8 +587,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     updateOverride(key, value) {
       const state = get();
       const overrides = { ...state.overrides, [key]: value } as PlannerOverrides;
-      const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, state.workouts);
-      set({ overrides, profile, windows, weekly });
+      const { profile, windows, weekly, weightSummary } = recomputePlan(
+        state.baseProfile,
+        overrides,
+        state.workouts,
+        state.weights,
+      );
+      set({ overrides, profile, windows, weekly, weightSummary });
       void persistOverrides(overrides);
     },
     updateCarbBand(type, index, value) {
@@ -427,16 +610,26 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       }
       bands[type] = band;
       const overrides = { ...state.overrides, carbBands: bands } as PlannerOverrides;
-      const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, state.workouts);
-      set({ overrides, profile, windows, weekly });
+      const { profile, windows, weekly, weightSummary } = recomputePlan(
+        state.baseProfile,
+        overrides,
+        state.workouts,
+        state.weights,
+      );
+      set({ overrides, profile, windows, weekly, weightSummary });
       void persistOverrides(overrides);
     },
     updateCarbSplit(part, value) {
       const state = get();
       const split = { ...state.overrides.carbSplit, [part]: value } as Profile['carbSplit'];
       const overrides = { ...state.overrides, carbSplit: split } as PlannerOverrides;
-      const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, state.workouts);
-      set({ overrides, profile, windows, weekly });
+      const { profile, windows, weekly, weightSummary } = recomputePlan(
+        state.baseProfile,
+        overrides,
+        state.workouts,
+        state.weights,
+      );
+      set({ overrides, profile, windows, weekly, weightSummary });
       void persistOverrides(overrides);
     },
     updateConnectionSetting(key, value) {
@@ -507,12 +700,18 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           pushSyncLog('info', 'Intervals.icu API key not configured', 'Using sample data.');
         }
 
-        const { profile, windows, weekly } = recomputePlan(state.baseProfile, overrides, workouts);
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          state.baseProfile,
+          overrides,
+          workouts,
+          state.weights,
+        );
         set({
           workouts,
           profile,
           windows,
           weekly,
+          weightSummary,
           dataSource,
           lastSyncISO,
           status: 'ready',
@@ -529,6 +728,65 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         } else {
           set({ isRefreshing: false, status: 'error', error: message, syncError: message });
         }
+      }
+    },
+    upsertWeightEntry(dateISO, value, unit) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) {
+        return;
+      }
+      const normalizedDate = normalizeDateKey(dateISO);
+      const weightKg = unit === 'kg' ? numeric : numeric * KG_PER_LB;
+      let persisted: WeightEntry[] | undefined;
+      set((state) => {
+        const nextWeights = upsertWeightList(state.weights, {
+          dateISO: normalizedDate,
+          weight_kg: weightKg,
+        });
+        const weightTrend = computeWeightTrend(nextWeights);
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          state.baseProfile,
+          state.overrides,
+          state.workouts,
+          nextWeights,
+        );
+        persisted = nextWeights;
+        return {
+          weights: nextWeights,
+          weightTrend,
+          profile,
+          windows,
+          weekly,
+          weightSummary,
+        };
+      });
+      if (persisted) {
+        void persistWeights(persisted);
+      }
+    },
+    deleteWeightEntry(dateISO) {
+      let persisted: WeightEntry[] | undefined;
+      set((state) => {
+        const nextWeights = removeWeightByDate(state.weights, dateISO);
+        const weightTrend = computeWeightTrend(nextWeights);
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          state.baseProfile,
+          state.overrides,
+          state.workouts,
+          nextWeights,
+        );
+        persisted = nextWeights;
+        return {
+          weights: nextWeights,
+          weightTrend,
+          profile,
+          windows,
+          weekly,
+          weightSummary,
+        };
+      });
+      if (persisted) {
+        void persistWeights(persisted);
       }
     },
   };

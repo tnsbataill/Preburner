@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import { usePlannerStore } from '../state/plannerStoreOld.js';
+import { usePlannerStore } from '../state/plannerStore.js';
 import type { EfficiencyPreset, SessionType } from '../types.js';
 
 const efficiencyPresetOptions: EfficiencyPreset[] = ['WorldClass', 'Elite', 'Competitive', 'Enthusiast'];

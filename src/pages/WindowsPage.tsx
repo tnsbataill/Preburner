@@ -1,4 +1,15 @@
-import { usePlannerStore } from '../state/plannerStoreOld.js';
+import { WINDOW_EMPTY_FLAG, WINDOW_UNDER_RECOVERY_FLAG } from '../calc/weekly.js';
+import { usePlannerStore } from '../state/plannerStore.js';
+
+function describeNote(note: string): string {
+  if (note === WINDOW_EMPTY_FLAG) {
+    return 'Safety flag: >1 kg overnight drop detected — deficit halved for this window.';
+  }
+  if (note === WINDOW_UNDER_RECOVERY_FLAG) {
+    return 'Safety flag: Weight trending up during deficit week — deficit blocked for this window.';
+  }
+  return note;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -70,7 +81,7 @@ export function WindowsPage() {
             {window.notes.length > 0 ? (
               <ul className="list-disc space-y-1 pl-5 text-xs text-amber-300/80">
                 {window.notes.map((note) => (
-                  <li key={note}>{note}</li>
+                  <li key={note}>{describeNote(note)}</li>
                 ))}
               </ul>
             ) : null}

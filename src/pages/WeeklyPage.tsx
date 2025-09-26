@@ -1,4 +1,18 @@
-import { usePlannerStore } from '../state/plannerStoreOld.js';
+import { usePlannerStore } from '../state/plannerStore.js';
+
+const LB_PER_KG = 2.2046226218;
+
+function formatDelta(value: number, useImperial: boolean): string {
+  const converted = useImperial ? value * LB_PER_KG : value;
+  const magnitude = Math.abs(converted).toFixed(1);
+  if (converted > 0) {
+    return `+${magnitude}`;
+  }
+  if (converted < 0) {
+    return `-${magnitude}`;
+  }
+  return `±${magnitude}`;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -9,6 +23,8 @@ function formatDate(iso: string) {
 
 export function WeeklyPage() {
   const weekly = usePlannerStore((state) => state.weekly);
+  const weightSummary = usePlannerStore((state) => state.weightSummary);
+  const useImperial = usePlannerStore((state) => state.profile.useImperial);
 
   return (
     <section className="space-y-6">
@@ -19,6 +35,40 @@ export function WeeklyPage() {
           the bars update instantly.
         </p>
       </header>
+
+      <div
+        className={`rounded-lg border p-4 text-xs sm:text-sm ${
+          weightSummary
+            ? weightSummary.expectedDeltaKg < -0.1 && weightSummary.actualDeltaKg > 0.25
+              ? 'border-rose-800/60 bg-rose-950/50 text-rose-100'
+              : weightSummary.expectedDeltaKg < -0.1 &&
+                  weightSummary.actualDeltaKg <= weightSummary.expectedDeltaKg - 0.2
+                ? 'border-emerald-700/60 bg-emerald-950/50 text-emerald-100'
+                : 'border-slate-800 bg-slate-950/60 text-slate-200'
+            : 'border-slate-800 bg-slate-950/40 text-slate-300'
+        }`}
+      >
+        {weightSummary ? (
+          <div className="space-y-1">
+            <p className="font-semibold uppercase tracking-wide text-[0.7rem] text-slate-400">
+              Weight trend (last {weightSummary.days} day{weightSummary.days === 1 ? '' : 's'})
+            </p>
+            <p>
+              Actual change: <span className="font-mono">{formatDelta(weightSummary.actualDeltaKg, useImperial)}</span>{' '}
+              vs expected{' '}
+              <span className="font-mono">{formatDelta(weightSummary.expectedDeltaKg, useImperial)}</span>
+            </p>
+            <p className="text-[0.7rem] text-slate-400">
+              Windowed from {new Date(`${weightSummary.startISO}T00:00:00Z`).toLocaleDateString()} to{' '}
+              {new Date(`${weightSummary.endISO}T00:00:00Z`).toLocaleDateString()}.
+            </p>
+          </div>
+        ) : (
+          <p className="text-[0.75rem] text-slate-400">
+            Log at least two weight entries to compare actual vs expected change over the last week.
+          </p>
+        )}
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         {weekly.map((week) => {

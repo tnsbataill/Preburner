@@ -1,4 +1,4 @@
-import type { PlannedWorkout } from '../types.js';
+import type { PlannedWorkout, WeightEntry } from '../types.js';
 import type { PlannerOverrides } from './types.js';
 
 interface SettingsRecord {
@@ -20,6 +20,11 @@ interface WorkoutCacheRecord {
   endISO: string;
   workouts: PlannedWorkout[];
   fetchedISO: string;
+}
+
+interface WeightRecord {
+  dateISO: string;
+  weight_kg: number;
 }
 
 export interface StoredIntervalsSettings {
@@ -53,6 +58,12 @@ async function getDatabase(): Promise<PlannerDatabase | undefined> {
         settings: '&id',
         connections: '&id',
         workoutCache: '&id',
+      });
+      db.version(3).stores({
+        settings: '&id',
+        connections: '&id',
+        workoutCache: '&id',
+        weights: '&dateISO',
       });
       return db;
     });
@@ -165,4 +176,28 @@ export async function clearCachedWorkouts(): Promise<void> {
   }
 
   await db.table<WorkoutCacheRecord, string>('workoutCache').clear();
+}
+
+export async function loadStoredWeights(): Promise<WeightEntry[]> {
+  const db = await getDatabase();
+  if (!db) {
+    return [];
+  }
+
+  const table = db.table<WeightRecord, string>('weights');
+  const records = await table.toArray();
+  return records.map((record) => ({ dateISO: record.dateISO, weight_kg: record.weight_kg }));
+}
+
+export async function persistWeights(weights: WeightEntry[]): Promise<void> {
+  const db = await getDatabase();
+  if (!db) {
+    return;
+  }
+
+  const table = db.table<WeightRecord, string>('weights');
+  await table.clear();
+  if (weights.length > 0) {
+    await table.bulkPut(weights.map((weight) => ({ dateISO: weight.dateISO, weight_kg: weight.weight_kg })));
+  }
 }
