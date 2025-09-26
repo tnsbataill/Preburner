@@ -76,12 +76,19 @@ interface IntervalsEventSummary {
   start_time?: string;
   end?: string;
   end_date?: string;
+  end_date_local?: string;
   duration?: number | string;
   planned_duration?: number | string;
   planned_duration_total?: number | string;
+  time_target?: number | string;
+  timeTarget?: number | string;
+  moving_time?: number | string;
+  movingTime?: number | string;
   planned_work_kj?: number | string;
   planned_work?: number | string;
   plannedWork?: number | string;
+  joules?: number | string;
+  target?: unknown;
   plannedTrainingLoad?: number;
   planned_tss?: number;
   planned_intensity_factor?: number;
@@ -93,11 +100,13 @@ interface IntervalsEventSummary {
   structuredWorkoutId?: number;
   workout_file_id?: number;
   workoutFileId?: number;
+  workout_doc?: unknown;
   steps?: unknown;
 }
 
 interface IntervalsEventDetail extends IntervalsEventSummary {
   structuredWorkout?: unknown;
+  workout_doc?: unknown;
   workout_file?: { id: number; ext?: string };
   files?: { id: number; ext?: string; type?: string }[];
 }
@@ -124,7 +133,15 @@ function normaliseIso(iso?: string): string | undefined {
 }
 
 function secondsFromEvent(event: IntervalsEventSummary): number | undefined {
-  const candidates = [event.planned_duration_total, event.planned_duration, event.duration];
+  const candidates = [
+    event.planned_duration_total,
+    event.planned_duration,
+    event.time_target,
+    (event as any).timeTarget,
+    event.moving_time,
+    (event as any).movingTime,
+    event.duration,
+  ];
   for (const candidate of candidates) {
     const seconds = toFiniteNumber(candidate);
     if (typeof seconds === 'number' && seconds > 0) {
@@ -575,6 +592,19 @@ function parseStructuredSteps(structured: unknown): Step[] | undefined {
     return parseZwoSteps(structured);
   }
 
+  if (structured && typeof structured === 'object') {
+    const record = structured as Record<string, unknown>;
+    const candidateKeys = ['steps', 'Steps', 'workout', 'Workout', 'doc', 'workout_doc', 'WorkoutDoc'];
+    for (const key of candidateKeys) {
+      if (record[key] !== undefined) {
+        const parsed = parseStructuredSteps(record[key]);
+        if (parsed && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    }
+  }
+
   return undefined;
 }
 
@@ -677,6 +707,11 @@ function extractPlannedKilojoules(
     }
   }
 
+  const joules = toFiniteNumber(event.joules);
+  if (typeof joules === 'number' && joules > 0) {
+    return { planned_kJ: joules / 1000, source: 'ICU Structured' };
+  }
+
   if (steps && steps.length > 0) {
     const estimated = sumStepKilojoules(steps, ftp);
     if (typeof estimated === 'number') return { planned_kJ: estimated, source: 'Estimated (steps)' };
@@ -696,12 +731,13 @@ async function fetchStructuredFile(
   athleteId: number,
   event: IntervalsEventSummary,
 ): Promise<Step[] | undefined> {
-  const detail = (await fetcher(`/athlete/${athleteId}/events/${event.id}`, 'json')) as
+  const detail = (await fetcher(`/athlete/${athleteId}/events/${event.id}?resolve=true`, 'json')) as
     | IntervalsEventDetail
     | undefined;
   if (!detail) return undefined;
 
-  const structured = detail.structuredWorkout ?? detail.steps ?? (detail as any).structured_workout;
+  const structured =
+    (detail as any).workout_doc ?? detail.structuredWorkout ?? detail.steps ?? (detail as any).structured_workout;
   const parsedSteps = parseStructuredSteps(structured ?? detail.steps);
   if (parsedSteps && parsedSteps.length > 0) return parsedSteps;
 
@@ -920,6 +956,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     if (oldest) url.searchParams.set('oldest', oldest);
     if (newest) url.searchParams.set('newest', newest);
     url.searchParams.set('category', 'WORKOUT');
+    url.searchParams.set('resolve', 'true');
     return url.pathname + url.search;
   }
 
@@ -1001,9 +1038,10 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
         normaliseIso(event.start_date ?? event.start ?? event.start_time ?? event.start_date_local) ?? undefined;
       if (!start) continue;
 
-      const steps = parseStructuredSteps(event.steps) ?? (await this.loadStructuredSteps(event));
+      const steps =
+        parseStructuredSteps(event.workout_doc ?? event.steps) ?? (await this.loadStructuredSteps(event));
       const durationSeconds = secondsFromEvent(event) ?? totalStepDurationSeconds(steps);
-      const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date);
+      const end = buildEndISO(start, durationSeconds, event.end ?? event.end_date ?? event.end_date_local);
       const tags = extractTags(event.tags);
       const labels = Array.isArray(event.labels) ? event.labels.map((label) => String(label)) : [];
       const defaultType = mapTagsToDefaultType([...tags, ...labels], 'Endurance');
