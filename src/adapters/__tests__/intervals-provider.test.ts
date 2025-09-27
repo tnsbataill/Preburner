@@ -24,7 +24,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({
           id: '0',
           ftp: 260,
@@ -113,7 +113,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({ id: '0', ftp: 250 });
       }
 
@@ -165,7 +165,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({ id: 0, ftp: 250 });
       }
 
@@ -217,7 +217,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({ id: '0', ftp: 255 });
       }
 
@@ -272,7 +272,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({ id: '0', ftp: 280 });
       }
 
@@ -284,7 +284,7 @@ describe('IntervalsProvider', () => {
         return buildJsonResponse([event]);
       }
 
-      if (path === '/api/v1/athlete/0/events/777?resolve=true') {
+      if (path === '/api/v1/athlete/0/events/777.json?resolve=true') {
         return buildJsonResponse({ ...event, files: [] });
       }
 
@@ -313,7 +313,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0') {
+      if (path === '/api/v1/athlete/0.json') {
         return buildJsonResponse({ id: '0', ftp: null });
       }
 
@@ -359,7 +359,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete') {
+      if (path === '/api/v1/athlete.json') {
         return new Response('Method Not Allowed', {
           status: 405,
           statusText: 'Method Not Allowed',
@@ -380,7 +380,7 @@ describe('IntervalsProvider', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://intervals.icu/api/v1/athlete',
+      'https://intervals.icu/api/v1/athlete.json',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: expect.any(String) }),
       }),
