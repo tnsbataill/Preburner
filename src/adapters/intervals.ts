@@ -774,6 +774,12 @@ function extractPlannedKilojoules(
     return { planned_kJ: joules / 1000, source: 'ICU Structured' };
   }
 
+  const desc = typeof event.description === 'string' ? event.description : undefined;
+  const fromDescription = parseKjFromDescription(desc);
+  if (typeof fromDescription === 'number') {
+    return { planned_kJ: fromDescription, source: 'Description' };
+  }
+
   let fallback: PlannedKilojoulesResult | undefined;
 
   if (steps && steps.length > 0) {
@@ -816,12 +822,6 @@ function extractPlannedKilojoules(
     }
   }
 
-  const desc = typeof event.description === 'string' ? event.description : undefined;
-  const fromDescription = parseKjFromDescription(desc);
-  if (typeof fromDescription === 'number') {
-    return { planned_kJ: fromDescription, source: 'Description' };
-  }
-
   return fallback ?? { planned_kJ: undefined, source: 'Estimated (fallback)' };
 }
 
@@ -830,7 +830,7 @@ async function fetchStructuredFile(
   athleteId: number,
   event: IntervalsEventSummary,
 ): Promise<Step[] | undefined> {
-  const detail = (await fetcher(`/athlete/${athleteId}/events/${event.id}?resolve=true`, 'json')) as
+  const detail = (await fetcher(`/athlete/${athleteId}/events/${event.id}.json?resolve=true`, 'json')) as
     | IntervalsEventDetail
     | undefined;
   if (!detail) return undefined;
@@ -1018,7 +1018,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       try {
         const label = this.athleteId === 0 ? 'current athlete (0)' : `athlete profile ${this.athleteId}`;
         this.log('info', `Refreshing ${label}`);
-        await this.loadAthleteProfile(`/athlete/${this.athleteId}`);
+        await this.loadAthleteProfile(`/athlete/${this.athleteId}.json`);
         this.logLoadedAthlete();
       } catch (error) {
         const detail = error instanceof Error ? error.message : undefined;
@@ -1030,7 +1030,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     // No athleteId supplied—attempt automatic lookup (may 405).
     this.log('info', 'Loading Intervals.icu athlete profile');
     try {
-      await this.loadAthleteProfile('/athlete');
+      await this.loadAthleteProfile('/athlete.json');
       this.logLoadedAthlete();
     } catch (error) {
       const detail = error instanceof Error ? error.message : undefined;
@@ -1172,12 +1172,28 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
         ],
         defaultType,
       );
-      const ftp = event.ftp_override ?? event.ftp ?? this.athleteFtp;
+      let ftp = event.ftp_override ?? event.ftp ?? this.athleteFtp;
+      const docFtp = (() => {
+        const doc = (event as any).workout_doc;
+        if (!doc || typeof doc !== 'object') return undefined;
+        const value = toFiniteNumber((doc as any).ftp);
+        return typeof value === 'number' && value > 0 ? value : undefined;
+      })();
+      if (typeof ftp !== 'number' && typeof docFtp === 'number') {
+        ftp = docFtp;
+      }
       const durationHr = ensureDurationHours(durationSeconds, start, end);
       if (typeof ftp === 'number') {
         this.updateLatestProfile({ ftp_watts: ftp });
       }
       const { planned_kJ, source } = extractPlannedKilojoules(event, steps, ftp, durationHr);
+
+      const logDetail = `kJ=${typeof planned_kJ === 'number' ? planned_kJ : 'NA'} src=${source} ftp=${
+        typeof ftp === 'number' ? ftp : 'NA'
+      } durHr=${durationHr.toFixed(2)} IF%=${
+        typeof icuIntensityPct === 'number' && icuIntensityPct > 0 ? icuIntensityPct : 'NA'
+      }`;
+      this.log('info', `Event ${event.id} kJ`, logDetail);
 
       workouts.push({
         id: String(event.id),
