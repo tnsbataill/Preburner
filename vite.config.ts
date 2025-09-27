@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { preburnerPwaPlugin } from './scripts/pwaPlugin.ts';
 
 export default defineConfig({
-  plugins: [react()],
+  base: './',
+  plugins: [react(), preburnerPwaPlugin()],
 });
