@@ -107,6 +107,8 @@ interface PlannerState {
     value: IntervalsConnectionSettings[K],
   ): void;
   refreshWorkouts(): Promise<void>;
+  setWorkoutType(workoutId: string, type: SessionType): void;
+  resetWorkoutType(workoutId: string): void;
   upsertWeightEntry(dateISO: string, value: number, unit: 'kg' | 'lb'): void;
   deleteWeightEntry(dateISO: string): void;
 }
@@ -912,6 +914,86 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           set({ isRefreshing: false, status: 'error', error: message, syncError: message });
         }
       }
+    },
+    setWorkoutType(workoutId, type) {
+      set((state) => {
+        let changed = false;
+        const updated = state.workouts.map((workout) => {
+          if (workout.id !== workoutId) {
+            return workout;
+          }
+
+          const original = workout.originalType ?? workout.type;
+          if (type === original) {
+            if (!workout.originalType) {
+              if (workout.type === original) {
+                return workout;
+              }
+              changed = true;
+              return { ...workout, type: original };
+            }
+            if (workout.type === original && workout.originalType === original) {
+              return workout;
+            }
+            changed = workout.type !== original;
+            const { originalType, ...rest } = workout;
+            return { ...rest, type: original };
+          }
+
+          if (workout.type === type) {
+            return workout;
+          }
+
+          changed = true;
+          return {
+            ...workout,
+            originalType: original,
+            type,
+          };
+        });
+
+        if (!changed) {
+          return {};
+        }
+
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          state.baseProfile,
+          state.overrides,
+          updated,
+          state.weights,
+        );
+
+        return { workouts: updated, profile, windows, weekly, weightSummary };
+      });
+    },
+    resetWorkoutType(workoutId) {
+      set((state) => {
+        let changed = false;
+        const updated = state.workouts.map((workout) => {
+          if (workout.id !== workoutId) {
+            return workout;
+          }
+          if (!workout.originalType) {
+            return workout;
+          }
+          changed = workout.type !== workout.originalType;
+          const { originalType, ...rest } = workout;
+          return { ...rest, type: originalType };
+        });
+
+        if (!changed) {
+          return {};
+        }
+
+        const { profile, windows, weekly, weightSummary } = recomputePlan(
+          state.baseProfile,
+          state.overrides,
+          updated,
+          state.weights,
+        );
+
+        return { workouts: updated, profile, windows, weekly, weightSummary };
+      });
     },
     upsertWeightEntry(dateISO, value, unit) {
       const numeric = Number(value);

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { usePlannerStore } from '../state/plannerStore.js';
 import { OverridesControls } from './OverridesControls.js';
 
@@ -41,6 +42,11 @@ export function SettingsPanel() {
       ? 'Refresh from Intervals.icu'
       : 'Load sample plan';
 
+  const apiKeyId = useId();
+  const athleteId = useId();
+  const startDateId = useId();
+  const rangeDaysId = useId();
+
   return (
     <aside className="space-y-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm shadow-inner shadow-slate-950/40">
       <header className="space-y-1">
@@ -51,18 +57,21 @@ export function SettingsPanel() {
       <section className="space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Intervals.icu</h3>
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wide text-slate-400">API key</label>
+          <label className="text-xs uppercase tracking-wide text-slate-400" htmlFor={apiKeyId}>
+            API key
+          </label>
           <input
             className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-100"
             type="password"
             placeholder="Paste your personal API key"
+            id={apiKeyId}
             value={connection.apiKey}
             onChange={(event) => updateConnectionSetting('apiKey', event.target.value)}
           />
           <p className="text-[0.65rem] text-slate-500">Stored locally in your browser via IndexedDB.</p>
         </div>
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wide text-slate-400">
+          <label className="text-xs uppercase tracking-wide text-slate-400" htmlFor={athleteId}>
             Athlete ID <span className="text-[0.6rem] lowercase text-slate-500">(optional)</span>
           </label>
           <input
@@ -71,6 +80,7 @@ export function SettingsPanel() {
             inputMode="numeric"
             pattern="[0-9]*"
             placeholder="e.g. 123456"
+            id={athleteId}
             value={connection.athleteId}
             onChange={(event) => updateConnectionSetting('athleteId', event.target.value)}
           />
@@ -79,30 +89,40 @@ export function SettingsPanel() {
           </p>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="space-y-2 text-xs uppercase tracking-wide text-slate-400">
-            <span>Start date</span>
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-wide text-slate-400" htmlFor={startDateId}>
+              Start date
+            </label>
             <input
               className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-100"
               type="date"
+              id={startDateId}
               value={connection.startDateISO}
               onChange={(event) => updateConnectionSetting('startDateISO', event.target.value)}
             />
-          </label>
-          <label className="space-y-2 text-xs uppercase tracking-wide text-slate-400">
-            <span>Days</span>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-wide text-slate-400" htmlFor={rangeDaysId}>
+              Days
+            </label>
             <div className="flex items-center gap-2">
               <input
                 className="flex-1 accent-emerald-400"
                 type="range"
+                id={rangeDaysId}
                 min={7}
                 max={14}
                 step={1}
                 value={connection.rangeDays}
+                aria-valuemin={7}
+                aria-valuemax={14}
+                aria-valuenow={connection.rangeDays}
+                aria-valuetext={`${connection.rangeDays} day${connection.rangeDays === 1 ? '' : 's'}`}
                 onChange={(event) => updateConnectionSetting('rangeDays', Number(event.target.value))}
               />
               <span className="w-8 text-right font-semibold text-slate-200">{connection.rangeDays}</span>
             </div>
-          </label>
+          </div>
         </div>
         <p className="text-[0.7rem] text-slate-400">Sync window: {rangeSummary}</p>
         <div className="space-y-2">
