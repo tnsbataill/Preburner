@@ -34,6 +34,14 @@ describe('IntervalsProvider', () => {
         });
       }
 
+      if (path.startsWith('/api/v1/athlete/0/wellness.csv')) {
+        const body = ['date,weight', '2024-06-01,70.4', '2024-06-05,70.1'].join('\n');
+        return new Response(body, {
+          status: 200,
+          headers: { 'Content-Type': 'text/csv' },
+        });
+      }
+
       if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
         return buildJsonResponse([
           { date: '2024-06-01', weight: 70.4 },

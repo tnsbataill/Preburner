@@ -1092,14 +1092,20 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       return [];
     }
 
-    const newest = extractDateParam(endISO) ?? extractDateParam(startISO) ?? new Date().toISOString().slice(0, 10);
-    const oldestBase = extractDateParam(startISO) ?? newest;
-    const oldest = shiftDateKey(oldestBase, -60);
-    const query = `oldest=${oldest}&newest=${newest}&dir=asc`;
-    const candidates: { path: string; responseType: 'json' | 'text' }[] = [
-      { path: `/athlete/${this.athleteId}/wellness.json?${query}`, responseType: 'json' },
-      { path: `/athlete/${this.athleteId}/wellness.csv?${query}`, responseType: 'text' },
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const endKey = extractDateParam(endISO);
+    const newest = endKey && endKey < todayKey ? endKey : todayKey;
+    const oldest = shiftDateKey(newest, -365);
+    const baseParams = new URLSearchParams({ oldest, newest, dir: 'asc' });
+    const paramsWithCols = new URLSearchParams(baseParams);
+    paramsWithCols.set('cols', 'weight');
+
+    const buildCandidates = (params: URLSearchParams): { path: string; responseType: 'json' | 'text' }[] => [
+      { path: `/athlete/${this.athleteId}/wellness.csv?${params.toString()}`, responseType: 'text' },
+      { path: `/athlete/${this.athleteId}/wellness.json?${params.toString()}`, responseType: 'json' },
     ];
+
+    const candidates = [...buildCandidates(paramsWithCols), ...buildCandidates(baseParams)];
 
     for (const candidate of candidates) {
       try {
