@@ -94,7 +94,7 @@ describe('IntervalsProvider', () => {
       request.toString().includes('/athlete/0/events.json'),
     );
     expect(eventsCall).toBeDefined();
-    const [eventsUrl, eventsInit] = eventsCall!;
+    const [eventsUrl, eventsInit] = eventsCall! as Parameters<typeof fetch>;
     expect(eventsUrl.toString()).toBe(
       'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT&resolve=true',
     );
