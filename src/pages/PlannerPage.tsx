@@ -23,7 +23,9 @@ export function PlannerPage() {
   const totalPlannedKj = useMemo(
     () =>
       workouts.reduce((sum, workout) => {
-        return sum + estimateWorkoutKilojoules(workout);
+        const planned = typeof workout.planned_kJ === 'number' ? workout.planned_kJ : undefined;
+        const estimated = planned ?? estimateWorkoutKilojoules(workout);
+        return sum + estimated;
       }, 0),
     [workouts],
   );
@@ -51,7 +53,7 @@ export function PlannerPage() {
           <p className="text-sm text-slate-300">{workouts.length} sessions scheduled.</p>
           <p className="text-xs uppercase tracking-wide text-slate-500">
             Total planned energy:{' '}
-            <span className="font-semibold text-slate-200">{totalPlannedKj.toFixed(0)} kJ</span>
+            <span className="font-semibold text-slate-200">{Math.round(totalPlannedKj)} kJ</span>
           </p>
         </div>
         {isRefreshing ? (
@@ -60,8 +62,10 @@ export function PlannerPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {workouts.map((workout) => {
-            const plannedKj = estimateWorkoutKilojoules(workout);
-            const kjSource = workout.kj_source ?? 'Estimated (IF/TSS)';
+            const plannedValue =
+              typeof workout.planned_kJ === 'number' ? workout.planned_kJ : estimateWorkoutKilojoules(workout);
+            const kjSource = workout.kj_source ?? 'Estimated (fallback)';
+            const plannedKjDisplay = Math.round(plannedValue);
             const ftpDisplay = workout.ftp_watts_at_plan ?? profile.ftp_watts;
 
             return (
@@ -80,7 +84,7 @@ export function PlannerPage() {
                 <dl className="grid grid-cols-2 gap-2 text-xs text-slate-400">
                   <div>
                     <dt>Planned energy</dt>
-                    <dd className="font-mono text-slate-200">{plannedKj.toFixed(0)} kJ</dd>
+                    <dd className="font-mono text-slate-200">{plannedKjDisplay} kJ</dd>
                   </div>
                   <div>
                     <dt>kJ source</dt>
