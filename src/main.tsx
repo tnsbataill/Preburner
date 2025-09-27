@@ -15,3 +15,9 @@ createRoot(container).render(
     <App />
   </StrictMode>,
 );
+
+if (import.meta.env.PROD) {
+  void import('virtual:preburner-sw-register').then(({ registerPreburnerServiceWorker }) => {
+    registerPreburnerServiceWorker();
+  });
+}

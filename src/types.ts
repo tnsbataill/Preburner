@@ -37,13 +37,19 @@ export interface PlannedWorkout {
   source: 'intervals' | 'file';
   title?: string;
   type: SessionType;
+  originalType?: SessionType;
   startISO: string;
   endISO: string;
   duration_hr: number;
   planned_kJ?: number;
   ftp_watts_at_plan?: number;
   steps?: Step[];
-  kj_source: 'ICU Structured' | 'Estimated (steps)' | 'Estimated (IF/TSS)';
+  kj_source:
+    | 'ICU Structured'
+    | 'Estimated (steps)'
+    | 'Estimated (IF/TSS)'
+    | 'Description'
+    | 'Estimated (fallback)';
 }
 
 export interface CarbPlan {
@@ -87,4 +93,5 @@ export interface WeeklyPlan {
 export interface WeightEntry {
   dateISO: string;
   weight_kg: number;
+  source?: 'manual' | 'intervals';
 }

@@ -1,16 +1,18 @@
-import {
+import type {
   CarbPlan,
   MacroTargets,
   PlannedWorkout,
   Profile,
   SessionType,
   WindowPlan,
-} from '../types';
-import { CarbComputationResult, computeCarbPlan } from './carb';
+} from '../types.js';
+import { type CarbComputationResult, computeCarbPlan } from './carb.js';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
+const SECONDS_PER_HOUR = 60 * 60;
 
 const HARD_SESSION_TYPES: SessionType[] = ['Threshold', 'VO2', 'Race'];
+const KCAL_PER_KJ = 1 / 4.184;
 
 function toDate(iso: string): Date {
   return new Date(iso);
@@ -111,7 +113,7 @@ export function estimateWorkoutKilojoules(workout: PlannedWorkout): number {
       Rest: 0,
     };
     const watts = workout.ftp_watts_at_plan * (intensityFactor[workout.type] ?? 0.7);
-    return (watts * workout.duration_hr * MS_PER_HOUR) / 1000;
+    return (watts * workout.duration_hr * SECONDS_PER_HOUR) / 1000;
   }
 
   return workout.duration_hr * 500;
@@ -147,7 +149,7 @@ export function buildWindows(profile: Profile, workouts: PlannedWorkout[]): Wind
     const dateKey = formatDateKey(prev ? prev.endISO : next.startISO);
     const activityFactor = profile.activityFactorOverrides?.[dateKey] ?? profile.activityFactorDefault;
     const restingKcal = rmr * (windowHours / 24) * activityFactor;
-    const exerciseKcal = estimateWorkoutKilojoules(next) / profile.efficiency;
+    const exerciseKcal = (estimateWorkoutKilojoules(next) / profile.efficiency) * KCAL_PER_KJ;
     const needKcal = restingKcal + exerciseKcal;
     const carbPlan = computeCarbPlan(profile, next, needKcal);
     const notes: string[] = [];

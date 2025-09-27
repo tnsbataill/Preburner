@@ -1,0 +1,13 @@
+{
+  "id": 501,
+  "title": "Kid Workout",
+  "start_date": "2024-09-10T08:00:00Z",
+  "category": "WORKOUT",
+  "description": "<p>Intervals set to burn kJ(Cal) 811 for this session.</p>",
+  "icu_intensity": 81,
+  "icu_training_load": 66,
+  "moving_time": 3600,
+  "ftp": 250,
+  "workout_file_base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHdvcmtvdXRfZmlsZT4KICA8d29ya291dD4KICAgIDxXYXJtdXAgRHVyYXRpb249IjYwMCIgUG93ZXJMb3c9IjAuNSIgUG93ZXJIaWdoPSIwLjc1IiAvPgogICAgPEludGVydmFsc1QgUmVwZWF0PSI0IiBPbkR1cmF0aW9uPSIyNDAiIE9mZkR1cmF0aW9uPSIxODAiIE9uUG93ZXI9IjEuMDUiIE9mZlBvd2VyPSIwLjYiIC8+CiAgICA8U3RlYWR5U3RhdGUgRHVyYXRpb249IjcyMCIgUG93ZXI9IjAuOCIgLz4KICAgIDxDb29sZG93biBEdXJhdGlvbj0iNjAwIiBQb3dlckxvdz0iMC41IiBQb3dlckhpZ2g9IjAuNjUiIC8+CiAgPC93b3Jrb3V0Pgo8L3dvcmtvdXRfZmlsZT4=",
+  "workout_filename": "Kid.zwo"
+}
