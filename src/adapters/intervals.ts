@@ -358,6 +358,7 @@ function inferSessionType(
   labels: string[],
   typeHints: (string | undefined)[],
   steps: Step[] | undefined,
+  intensityHints: (number | undefined)[],
   defaultType: SessionType,
 ): SessionType {
   const combined = [name, ...tags, ...labels, ...typeHints.filter((hint): hint is string => typeof hint === 'string')]
@@ -402,6 +403,17 @@ function inferSessionType(
 
   if (maxPct && maxPct >= 115) return 'VO2';
   if (maxPct && maxPct >= 100) return 'Threshold';
+
+  const intensity = intensityHints
+    .map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
+    .filter((value): value is number => typeof value === 'number')
+    .reduce((max, value) => (value > max ? value : max), 0);
+
+  if ((!steps || steps.length === 0) && intensity > 0) {
+    if (intensity >= 1.15) return 'VO2';
+    if (intensity >= 1) return 'Threshold';
+    if (intensity >= 0.85) return 'Tempo';
+  }
   if (combined.includes('recovery')) return 'Endurance';
 
   return defaultType;
@@ -504,14 +516,16 @@ function estimateFromTss(
 }
 
 function sumStepKilojoules(steps: Step[], ftp: number | undefined): number | undefined {
-  if (!ftp || steps.length === 0) return undefined;
+  if (steps.length === 0) return undefined;
+  const requiresFtp = steps.some((step) => step.target_type === '%FTP');
+  if (requiresFtp && !ftp) return undefined;
   let total = 0;
   for (const step of steps) {
     if (step.target_type === '%FTP') {
       const lo = step.target_lo ?? step.target_hi ?? 0;
       const hi = step.target_hi ?? step.target_lo ?? 0;
       const pct = (lo + hi) / 2 / 100;
-      total += pct * ftp * step.duration_s;
+      total += pct * (ftp ?? 0) * step.duration_s;
     } else if (step.target_type === 'Watts') {
       const lo = step.target_lo ?? step.target_hi ?? 0;
       const hi = step.target_hi ?? step.target_lo ?? 0;
@@ -535,6 +549,88 @@ function totalStepDurationSeconds(steps: Step[] | undefined): number | undefined
     }
   }
   return total > 0 ? total : undefined;
+}
+
+function parseKjFromDescription(desc?: string): number | undefined {
+  if (!desc) return undefined;
+  const text = desc.replace(/<[^>]+>/g, ' ');
+  const match = /\b(\d{2,5})\s*kJ\b|\bkJ(?:\(Cal\))?\s*(\d{2,5})\b/i.exec(text);
+  if (!match) return undefined;
+  const raw = match[1] ?? match[2];
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+interface SimpleZwoNode {
+  tag: string;
+  get(name: string): string | undefined;
+}
+
+function buildStepsFromZwoNodes(nodes: SimpleZwoNode[]): Step[] | undefined {
+  if (nodes.length === 0) return undefined;
+
+  const steps: Step[] = [];
+  let cursor = 0;
+
+  const appendStep = (duration: number, lo: number, hi: number, targetType: Step['target_type']) => {
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const durationSeconds = Math.max(1, Math.round(duration));
+    steps.push({
+      start_s: cursor,
+      duration_s: durationSeconds,
+      target_type: targetType,
+      target_lo: lo,
+      target_hi: hi,
+    });
+    cursor += durationSeconds;
+  };
+
+  const parsePower = (value: string | undefined): number => {
+    if (!value) return 0;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return numeric <= 1 ? numeric * 100 : numeric;
+  };
+
+  for (const node of nodes) {
+    const tag = node.tag.toLowerCase();
+    if (!tag) continue;
+
+    if (tag === 'steadystate') {
+      const duration = Number(node.get('Duration'));
+      const power = parsePower(node.get('Power'));
+      appendStep(duration, power, power, '%FTP');
+    } else if (tag === 'warmup' || tag === 'cooldown') {
+      const duration = Number(node.get('Duration'));
+      const low = parsePower(node.get('PowerLow'));
+      const high = parsePower(node.get('PowerHigh'));
+      appendStep(duration, low, high, '%FTP');
+    } else if (tag === 'intervalst') {
+      const repeats = Number(node.get('Repeat'));
+      const onDuration = Number(node.get('OnDuration'));
+      const offDuration = Number(node.get('OffDuration'));
+      const onPower = parsePower(node.get('OnPower'));
+      const offPower = parsePower(node.get('OffPower'));
+      const repeatCount = Number.isFinite(repeats) && repeats > 0 ? Math.round(repeats) : 1;
+      for (let r = 0; r < repeatCount; r += 1) {
+        appendStep(onDuration, onPower, onPower, '%FTP');
+        if (Number.isFinite(offDuration) && offDuration > 0) {
+          appendStep(offDuration, offPower, offPower, '%FTP');
+        }
+      }
+    } else if (tag === 'freeride') {
+      const duration = Number(node.get('Duration'));
+      const watts = Number(node.get('FlatRoadSpeed'));
+      if (Number.isFinite(watts) && watts > 0) {
+        appendStep(duration, watts, watts, 'Watts');
+      } else {
+        appendStep(duration, 55, 65, '%FTP');
+      }
+    }
+  }
+
+  return steps.length > 0 ? steps : undefined;
 }
 
 function parseStructuredSteps(structured: unknown): Step[] | undefined {
@@ -617,77 +713,43 @@ function parseZwoSteps(zwo: string): Step[] | undefined {
       const doc = parser.parseFromString(zwo, 'application/xml');
       const workout = doc.querySelector('workout') ?? doc.querySelector('Workout');
       if (!workout) return undefined;
-      const steps: Step[] = [];
-      let cursor = 0;
-
-      const appendStep = (duration: number, lo: number, hi: number) => {
-        const durationSeconds = Math.max(1, Math.round(duration));
-        steps.push({
-          start_s: cursor,
-          duration_s: durationSeconds,
-          target_type: '%FTP',
-          target_lo: lo,
-          target_hi: hi,
-        });
-        cursor += durationSeconds;
-      };
-
-      const parsePower = (value: string | null): number => {
-        if (!value) return 0;
-        const numeric = Number(value);
-        if (!Number.isFinite(numeric)) return 0;
-        return numeric <= 1 ? numeric * 100 : numeric;
-      };
-
+      const nodes: SimpleZwoNode[] = [];
       const elements = workout.children;
       for (let i = 0; i < elements.length; i += 1) {
-        const node = elements[i];
-        const tag = node.tagName?.toLowerCase();
-        if (!tag) continue;
-
-        if (tag === 'steadystate') {
-          const duration = Number(node.getAttribute('Duration'));
-          const power = parsePower(node.getAttribute('Power'));
-          appendStep(duration, power, power);
-        } else if (tag === 'warmup' || tag === 'cooldown') {
-          const duration = Number(node.getAttribute('Duration'));
-          const low = parsePower(node.getAttribute('PowerLow'));
-          const high = parsePower(node.getAttribute('PowerHigh'));
-          appendStep(duration, low, high);
-        } else if (tag === 'intervalst') {
-          const repeats = Number(node.getAttribute('Repeat'));
-          const onDuration = Number(node.getAttribute('OnDuration'));
-          const offDuration = Number(node.getAttribute('OffDuration'));
-          const onPower = parsePower(node.getAttribute('OnPower'));
-          const offPower = parsePower(node.getAttribute('OffPower'));
-          const repeatCount = Number.isFinite(repeats) && repeats > 0 ? Math.round(repeats) : 1;
-          for (let r = 0; r < repeatCount; r += 1) {
-            appendStep(onDuration, onPower, onPower);
-            if (offDuration > 0) appendStep(offDuration, offPower, offPower);
-          }
-        } else if (tag === 'freeride') {
-          const duration = Number(node.getAttribute('Duration'));
-          const watts = Number(node.getAttribute('FlatRoadSpeed'));
-          if (Number.isFinite(watts) && watts > 0) {
-            const durationSeconds = Math.max(1, Math.round(duration));
-            steps.push({
-              start_s: cursor,
-              duration_s: durationSeconds,
-              target_type: 'Watts',
-              target_lo: watts,
-              target_hi: watts,
-            });
-            cursor += durationSeconds;
-          } else {
-            appendStep(duration, 55, 65);
-          }
-        }
+        const element = elements[i];
+        nodes.push({
+          tag: element.tagName ?? '',
+          get: (name: string) => element.getAttribute(name) ?? element.getAttribute(name.toLowerCase()),
+        });
       }
-
-      return steps.length > 0 ? steps : undefined;
+      return buildStepsFromZwoNodes(nodes);
     } catch (error) {
       console.warn('Failed to parse ZWO structured workout', error);
     }
+  }
+
+  const elementRegex = /<(Warmup|Cooldown|SteadyState|IntervalsT|FreeRide)\b([^>]*)>/gi;
+  const nodes: SimpleZwoNode[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = elementRegex.exec(zwo)) !== null) {
+    const [, rawTag, rawAttrs] = match;
+    const attrMap: Record<string, string> = {};
+    const attrRegex = /(\w+)="([^"]*)"/g;
+    let attrMatch: RegExpExecArray | null;
+    while ((attrMatch = attrRegex.exec(rawAttrs ?? '')) !== null) {
+      const [, key, value] = attrMatch;
+      attrMap[key] = value;
+      attrMap[key.toLowerCase()] = value;
+    }
+    nodes.push({
+      tag: rawTag,
+      get: (name: string) => attrMap[name] ?? attrMap[name.toLowerCase()],
+    });
+  }
+
+  const parsed = buildStepsFromZwoNodes(nodes);
+  if (parsed && parsed.length > 0) {
+    return parsed;
   }
 
   return undefined;
@@ -707,23 +769,60 @@ function extractPlannedKilojoules(
     }
   }
 
-  const joules = toFiniteNumber(event.joules);
+  const joules = toFiniteNumber((event as any).joules ?? event.joules);
   if (typeof joules === 'number' && joules > 0) {
     return { planned_kJ: joules / 1000, source: 'ICU Structured' };
   }
 
+  let fallback: PlannedKilojoulesResult | undefined;
+
   if (steps && steps.length > 0) {
     const estimated = sumStepKilojoules(steps, ftp);
-    if (typeof estimated === 'number') return { planned_kJ: estimated, source: 'Estimated (steps)' };
+    if (typeof estimated === 'number') {
+      fallback = { planned_kJ: estimated, source: 'Estimated (steps)' };
+    }
   }
 
-  const fromIf = estimateFromIf(ftp, event.planned_intensity_factor, durationHr);
-  if (typeof fromIf === 'number') return { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
+  const icuIntensityPct = toFiniteNumber((event as any).icu_intensity);
+  const icuTrainingLoad = toFiniteNumber((event as any).icu_training_load);
+  const plannedIntensityFactor = toFiniteNumber(event.planned_intensity_factor);
 
-  const fromTss = estimateFromTss(ftp, event.planned_tss ?? (event as any).plannedTss, durationHr);
-  if (typeof fromTss === 'number') return { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
+  if (!fallback && typeof ftp === 'number' && durationHr > 0) {
+    const intensity =
+      typeof icuIntensityPct === 'number' && icuIntensityPct > 0
+        ? icuIntensityPct / 100
+        : plannedIntensityFactor;
+    if (typeof intensity === 'number' && intensity > 0) {
+      const fromIf = estimateFromIf(ftp, intensity, durationHr);
+      if (typeof fromIf === 'number') {
+        fallback = { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
+      }
+    }
 
-  return { planned_kJ: undefined, source: 'Estimated (IF/TSS)' };
+    if (!fallback) {
+      const tssCandidates = [
+        icuTrainingLoad,
+        toFiniteNumber(event.planned_tss),
+        toFiniteNumber((event as any).plannedTss),
+      ];
+      for (const tssCandidate of tssCandidates) {
+        if (typeof tssCandidate !== 'number' || tssCandidate <= 0) continue;
+        const fromTss = estimateFromTss(ftp, tssCandidate, durationHr);
+        if (typeof fromTss === 'number') {
+          fallback = { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
+          break;
+        }
+      }
+    }
+  }
+
+  const desc = typeof event.description === 'string' ? event.description : undefined;
+  const fromDescription = parseKjFromDescription(desc);
+  if (typeof fromDescription === 'number') {
+    return { planned_kJ: fromDescription, source: 'Description' };
+  }
+
+  return fallback ?? { planned_kJ: undefined, source: 'Estimated (fallback)' };
 }
 
 async function fetchStructuredFile(
@@ -961,6 +1060,20 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
   }
 
   private async loadStructuredSteps(event: IntervalsEventSummary): Promise<Step[] | undefined> {
+    const inline = (event as any).workout_file_base64;
+    const inlineExt = (event as any).workout_filename;
+    if (inline && typeof inline === 'string' && /zwo$/i.test(typeof inlineExt === 'string' ? inlineExt : '')) {
+      try {
+        const decoded = typeof Buffer !== 'undefined' ? Buffer.from(inline, 'base64').toString('utf-8') : atob(inline);
+        const parsedInline = parseZwoSteps(decoded);
+        if (parsedInline && parsedInline.length > 0) {
+          return parsedInline;
+        }
+      } catch {
+        // ignore inline parsing issues and fall back to API fetch below
+      }
+    }
+
     if (typeof this.athleteId !== 'number') return undefined;
     try {
       this.log('info', `Fetching structured workout for event ${event.id}`);
@@ -1046,12 +1159,17 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       const labels = Array.isArray(event.labels) ? event.labels.map((label) => String(label)) : [];
       const defaultType = mapTagsToDefaultType([...tags, ...labels], 'Endurance');
       const sessionName = event.title ?? event.name ?? 'Workout';
+      const icuIntensityPct = toFiniteNumber((event as any).icu_intensity);
       const inferredType = inferSessionType(
         sessionName,
         tags,
         labels,
         [event.type, event.workout_type, event.sport, event.category, event.description],
         steps,
+        [
+          toFiniteNumber(event.planned_intensity_factor),
+          typeof icuIntensityPct === 'number' ? icuIntensityPct / 100 : undefined,
+        ],
         defaultType,
       );
       const ftp = event.ftp_override ?? event.ftp ?? this.athleteFtp;
