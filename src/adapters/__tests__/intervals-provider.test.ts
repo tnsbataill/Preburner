@@ -17,6 +17,7 @@ describe('IntervalsProvider', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('fetches planned workouts for personal API keys using basic auth and athlete 0', async () => {
@@ -114,6 +115,66 @@ describe('IntervalsProvider', () => {
         message: expect.stringContaining('Prepared 1 workouts for planner'),
       }),
     );
+  });
+
+  it('captures anthropometrics from nested profile payloads', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const path = `${url.pathname}${url.search}`;
+
+      if (path === '/api/v1/athlete/0.json') {
+        return buildJsonResponse({
+          id: '0',
+          profile: {
+            ftp: 275,
+            weight_kg: '68.5',
+            height_cm: '172.5',
+            sex: 'Female',
+            birth_date: '1995-04-15',
+            use_imperial: false,
+          },
+        });
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
+        return buildJsonResponse([]);
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/events.json')) {
+        return buildJsonResponse([
+          {
+            id: 11,
+            title: 'Endurance Ride',
+            start_date: '2024-01-02T09:00:00Z',
+            planned_duration_total: 3600,
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch to ${path}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createIntervalsProvider('abc123', undefined, { athleteId: 0 });
+
+    const workouts = await provider.getPlannedWorkouts(
+      '2024-01-01T00:00:00.000Z',
+      '2024-01-03T00:00:00.000Z',
+    );
+
+    expect(workouts).toHaveLength(1);
+
+    const context = provider.getLatestAthleteContext();
+    expect(context?.profile?.sex).toBe('F');
+    expect(context?.profile?.height_cm).toBeCloseTo(172.5);
+    expect(context?.profile?.weight_kg).toBeCloseTo(68.5);
+    expect(context?.profile?.ftp_watts).toBe(275);
+    expect(context?.profile?.useImperial).toBe(false);
+    expect(context?.profile?.age_years).toBeGreaterThanOrEqual(28);
   });
 
   it('parses numeric string durations and kilojoules from events', async () => {
@@ -428,7 +489,7 @@ describe('IntervalsProvider', () => {
       request.toString().startsWith('https://intervals.icu/api/v1/athlete/0/events.json'),
     );
     expect(eventsCall).toBeDefined();
-    const [eventsUrl, eventsInit] = eventsCall!;
+    const [eventsUrl, eventsInit] = eventsCall! as Parameters<typeof fetch>;
     expect(eventsUrl.toString()).toBe(
       'https://intervals.icu/api/v1/athlete/0/events.json?oldest=2024-06-10&newest=2024-06-20&category=WORKOUT&resolve=true',
     );

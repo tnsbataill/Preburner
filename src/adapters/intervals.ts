@@ -43,6 +43,8 @@ interface IntervalsAthleteResponse {
   preferred_units?: string;
   use_imperial?: boolean;
   useImperial?: boolean;
+  profile?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
 }
 
 interface IntervalsAthleteProfile {
@@ -198,7 +200,7 @@ function computeAgeYears(birthDateISO: string): number | undefined {
   return age >= 0 ? age : undefined;
 }
 
-function parseUseImperial(value: unknown): boolean | undefined {
+function parseUseImperialValue(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') {
     return value;
   }
@@ -215,44 +217,116 @@ function parseUseImperial(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function parseWeightFromAthlete(athlete: IntervalsAthleteResponse): number | undefined {
-  const candidates: { value: unknown; unit: 'kg' | 'lb' }[] = [
-    { value: athlete.weight_kg, unit: 'kg' },
-    { value: athlete.weightKg, unit: 'kg' },
-    { value: athlete.weight, unit: 'kg' },
-    { value: athlete.weight_lb, unit: 'lb' },
-    { value: athlete.weightLb, unit: 'lb' },
-  ];
-  for (const candidate of candidates) {
-    const numeric = toFiniteNumber(candidate.value);
-    if (typeof numeric === 'number' && numeric > 0) {
-      return candidate.unit === 'lb' ? numeric * KG_PER_LB : numeric;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function gatherAthleteRecords(athlete: IntervalsAthleteResponse): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [athlete as unknown as Record<string, unknown>];
+  const nestedCandidates = [athlete.profile, athlete.metrics];
+  for (const candidate of nestedCandidates) {
+    if (isRecord(candidate)) {
+      records.push(candidate);
+    }
+  }
+  return records;
+}
+
+function extractNumber(records: Record<string, unknown>[], keys: string[]): number | undefined {
+  for (const record of records) {
+    for (const key of keys) {
+      const numeric = toFiniteNumber(record[key]);
+      if (typeof numeric === 'number') {
+        return numeric;
+      }
     }
   }
   return undefined;
 }
 
-function parseHeightFromAthlete(athlete: IntervalsAthleteResponse): number | undefined {
-  const cmCandidates = [athlete.height_cm, athlete.heightCm];
-  for (const candidate of cmCandidates) {
-    const numeric = toFiniteNumber(candidate);
-    if (typeof numeric === 'number' && numeric > 0) {
-      return numeric;
+function extractWeightKg(records: Record<string, unknown>[]): number | undefined {
+  const candidates: { key: string; unit: 'kg' | 'lb' }[] = [
+    { key: 'weight_kg', unit: 'kg' },
+    { key: 'weightKg', unit: 'kg' },
+    { key: 'weight', unit: 'kg' },
+    { key: 'weight_lb', unit: 'lb' },
+    { key: 'weightLb', unit: 'lb' },
+  ];
+  for (const record of records) {
+    for (const candidate of candidates) {
+      const numeric = toFiniteNumber(record[candidate.key]);
+      if (typeof numeric === 'number' && numeric > 0) {
+        return candidate.unit === 'lb' ? numeric * KG_PER_LB : numeric;
+      }
+    }
+  }
+  return undefined;
+}
+
+function extractHeightCm(records: Record<string, unknown>[]): number | undefined {
+  for (const record of records) {
+    const cmCandidates = ['height_cm', 'heightCm'];
+    for (const key of cmCandidates) {
+      const numeric = toFiniteNumber(record[key]);
+      if (typeof numeric === 'number' && numeric > 0) {
+        return numeric;
+      }
+    }
+
+    const rawHeight = toFiniteNumber(record['height']);
+    if (typeof rawHeight === 'number' && rawHeight > 0) {
+      return rawHeight > 3 ? rawHeight : rawHeight * 100;
+    }
+
+    const feet = toFiniteNumber(record['height_ft'] ?? record['heightFt']);
+    const inches = toFiniteNumber(record['height_in'] ?? record['heightIn']);
+    if (typeof feet === 'number') {
+      const totalInches = feet * 12 + (typeof inches === 'number' ? inches : 0);
+      if (totalInches > 0) {
+        return totalInches * 2.54;
+      }
     }
   }
 
-  const rawHeight = toFiniteNumber(athlete.height);
-  if (typeof rawHeight === 'number' && rawHeight > 0) {
-    return rawHeight > 3 ? rawHeight : rawHeight * 100;
-  }
+  return undefined;
+}
 
-  const feet = toFiniteNumber(athlete.height_ft ?? athlete.heightFt);
-  const inches = toFiniteNumber(athlete.height_in ?? athlete.heightIn);
-  if (typeof feet === 'number') {
-    const totalInches = feet * 12 + (typeof inches === 'number' ? inches : 0);
-    return totalInches > 0 ? totalInches * 2.54 : undefined;
+function extractSex(records: Record<string, unknown>[]): 'M' | 'F' | undefined {
+  for (const record of records) {
+    const value = record['sex'] ?? record['gender'];
+    const parsed = parseSex(value);
+    if (parsed) {
+      return parsed;
+    }
   }
+  return undefined;
+}
 
+function extractBirthDate(records: Record<string, unknown>[]): string | undefined {
+  for (const record of records) {
+    const candidate = record['birth_date'] ?? record['birthDate'] ?? record['dob'];
+    const parsed = parseBirthDate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function extractUseImperial(records: Record<string, unknown>[]): boolean | undefined {
+  for (const record of records) {
+    const candidate =
+      record['use_imperial'] ??
+      record['useImperial'] ??
+      record['units'] ??
+      record['unit'] ??
+      record['unit_system'] ??
+      record['preferred_units'];
+    const parsed = parseUseImperialValue(candidate);
+    if (typeof parsed === 'boolean') {
+      return parsed;
+    }
+  }
   return undefined;
 }
 
@@ -978,19 +1052,18 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       throw new Error('Unable to load Intervals.icu athlete profile');
     }
     this.athleteId = resolvedAthleteId;
-    const ftp = toFiniteNumber(athlete.ftp);
+    const records = gatherAthleteRecords(athlete);
+    const ftp = extractNumber(records, ['ftp', 'ftp_watts', 'ftpWatts']);
     if (typeof ftp === 'number') {
       this.athleteFtp = ftp;
     }
 
-    const weightKg = parseWeightFromAthlete(athlete);
-    const heightCm = parseHeightFromAthlete(athlete);
-    const sex = parseSex(athlete.sex ?? athlete.gender);
-    const birthDate = parseBirthDate(athlete.birth_date ?? athlete.birthDate ?? athlete.dob);
+    const weightKg = extractWeightKg(records);
+    const heightCm = extractHeightCm(records);
+    const sex = extractSex(records);
+    const birthDate = extractBirthDate(records);
     const ageYears = birthDate ? computeAgeYears(birthDate) : undefined;
-    const useImperial = parseUseImperial(
-      athlete.use_imperial ?? athlete.useImperial ?? athlete.units ?? athlete.unit ?? athlete.unit_system ?? athlete.preferred_units,
-    );
+    const useImperial = extractUseImperial(records);
 
     this.updateLatestProfile({
       ftp_watts: typeof ftp === 'number' ? ftp : undefined,
