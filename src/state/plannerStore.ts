@@ -624,6 +624,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
         let syncError: string | undefined;
         let importedWeights: WeightEntry[] = [];
         let externalProfile: ExternalProfileUpdate | undefined;
+        let shouldAutoRefresh = false;
 
         if (connection.apiKey) {
           pushSyncLog('info', 'Intervals.icu API key detected');
@@ -640,6 +641,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
             workouts = cached.workouts;
             lastSyncISO = cached.fetchedISO;
             dataSource = 'intervals';
+            if (!externalProfile && cached.profile) {
+              externalProfile = cached.profile;
+            }
+            if (cached.weights && cached.weights.length > 0) {
+              importedWeights = cached.weights;
+            }
+            shouldAutoRefresh = true;
             pushSyncLog(
               'info',
               `Loaded ${workouts.length} cached workout${workouts.length === 1 ? '' : 's'}`,
@@ -661,7 +669,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
               }
               dataSource = 'intervals';
               lastSyncISO = new Date().toISOString();
-              await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+              await persistCachedWorkouts(
+                startISO,
+                endISO,
+                workouts,
+                lastSyncISO,
+                context?.profile,
+                context?.weights,
+              );
               pushSyncLog('info', `Synced ${workouts.length} workout${workouts.length === 1 ? '' : 's'}`);
             } catch (error) {
               syncError = error instanceof Error ? error.message : 'Failed to sync Intervals.icu workouts';
@@ -715,6 +730,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           error: undefined,
         });
         void persistWeights(weights);
+
+        if (shouldAutoRefresh && connection.apiKey) {
+          // Fire-and-forget full refresh so cached loads are quickly replaced with live data.
+          void get().refreshWorkouts();
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error loading plan';
         set({ status: 'error', error: message });
@@ -860,7 +880,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
           }
           dataSource = 'intervals';
           lastSyncISO = new Date().toISOString();
-          await persistCachedWorkouts(startISO, endISO, workouts, lastSyncISO);
+          await persistCachedWorkouts(
+            startISO,
+            endISO,
+            workouts,
+            lastSyncISO,
+            context?.profile,
+            context?.weights,
+          );
           if (workouts.length === 0) {
             pushSyncLog('warn', 'Intervals.icu returned zero workouts');
           }
@@ -1068,4 +1095,3 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     },
   };
 });
-
