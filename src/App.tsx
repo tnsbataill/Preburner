@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { WeightTracker } from './components/WeightTracker.js';
 import { QuickAdjustmentsPanel } from './components/QuickAdjustmentsPanel.js';
+import { InstallPrompt } from './components/InstallPrompt.js';
+import { OfflinePlanSync } from './components/OfflinePlanSync.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { PlannerPage } from './pages/PlannerPage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
@@ -101,6 +103,8 @@ export default function App() {
               );
             })}
           </nav>
+
+          <InstallPrompt />
         </header>
 
         <div className="flex flex-col gap-6 lg:flex-row">
@@ -111,6 +115,7 @@ export default function App() {
           <main className="flex-1 space-y-6">{content}</main>
         </div>
       </div>
+      <OfflinePlanSync />
     </div>
   );
 }
