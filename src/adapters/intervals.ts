@@ -774,6 +774,7 @@ function extractPlannedKilojoules(
     return { planned_kJ: joules / 1000, source: 'ICU Structured' };
   }
 
+  // Prefer explicit energy totals mentioned in the description before falling back to estimates.
   const desc = typeof event.description === 'string' ? event.description : undefined;
   const fromDescription = parseKjFromDescription(desc);
   if (typeof fromDescription === 'number') {
@@ -1175,9 +1176,8 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       let ftp = event.ftp_override ?? event.ftp ?? this.athleteFtp;
       const docFtp = (() => {
         const doc = (event as any).workout_doc;
-        if (!doc || typeof doc !== 'object') return undefined;
-        const value = toFiniteNumber((doc as any).ftp);
-        return typeof value === 'number' && value > 0 ? value : undefined;
+        const v = doc && typeof doc === 'object' ? toFiniteNumber((doc as any).ftp) : undefined;
+        return typeof v === 'number' && v > 0 ? v : undefined;
       })();
       if (typeof ftp !== 'number' && typeof docFtp === 'number') {
         ftp = docFtp;
@@ -1188,12 +1188,13 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       }
       const { planned_kJ, source } = extractPlannedKilojoules(event, steps, ftp, durationHr);
 
-      const logDetail = `kJ=${typeof planned_kJ === 'number' ? planned_kJ : 'NA'} src=${source} ftp=${
-        typeof ftp === 'number' ? ftp : 'NA'
-      } durHr=${durationHr.toFixed(2)} IF%=${
-        typeof icuIntensityPct === 'number' && icuIntensityPct > 0 ? icuIntensityPct : 'NA'
-      }`;
-      this.log('info', `Event ${event.id} kJ`, logDetail);
+      this.log(
+        'info',
+        `Event ${event.id} kJ`,
+        `kJ=${planned_kJ ?? 'NA'} src=${source} ftp=${(ftp ?? 'NA')} durHr=${durationHr.toFixed(
+          2,
+        )} IF%=${(event as any).icu_intensity ?? 'NA'}`,
+      );
 
       workouts.push({
         id: String(event.id),
