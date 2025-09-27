@@ -719,7 +719,10 @@ function parseZwoSteps(zwo: string): Step[] | undefined {
         const element = elements[i];
         nodes.push({
           tag: element.tagName ?? '',
-          get: (name: string) => element.getAttribute(name) ?? element.getAttribute(name.toLowerCase()),
+          get: (name: string) =>
+            element.getAttribute(name) ??
+            element.getAttribute(name.toLowerCase()) ??
+            undefined,
         });
       }
       return buildStepsFromZwoNodes(nodes);
