@@ -1,11 +1,48 @@
 import { usePlannerStore } from '../state/plannerStore.js';
 
+const LB_PER_KG = 2.2046226218;
+const CM_PER_INCH = 2.54;
+const INCHES_PER_FOOT = 12;
+
+function formatWeight(weightKg: number, useImperial: boolean): string {
+  if (!Number.isFinite(weightKg)) {
+    return '—';
+  }
+  const pounds = weightKg * LB_PER_KG;
+  if (useImperial) {
+    return `${pounds.toFixed(1)} lb (${weightKg.toFixed(1)} kg)`;
+  }
+  return `${weightKg.toFixed(1)} kg (${pounds.toFixed(1)} lb)`;
+}
+
+function formatHeight(heightCm: number, useImperial: boolean): string {
+  if (!Number.isFinite(heightCm)) {
+    return '—';
+  }
+  if (useImperial) {
+    const totalInches = heightCm / CM_PER_INCH;
+    const feet = Math.floor(totalInches / INCHES_PER_FOOT);
+    const inches = totalInches - feet * INCHES_PER_FOOT;
+    const roundedInches = Math.round(inches * 10) / 10;
+    return `${feet} ft ${roundedInches.toFixed(1)} in (${heightCm.toFixed(0)} cm)`;
+  }
+  const inches = heightCm / CM_PER_INCH;
+  return `${heightCm.toFixed(0)} cm (${inches.toFixed(1)} in)`;
+}
+
 export function OnboardingPage() {
   const profile = usePlannerStore((state) => state.profile);
   const workouts = usePlannerStore((state) => state.workouts);
   const dataSource = usePlannerStore((state) => state.dataSource);
   const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
   const syncError = usePlannerStore((state) => state.syncError);
+
+  const weightDisplay = formatWeight(profile.weight_kg, profile.useImperial);
+  const heightDisplay = formatHeight(profile.height_cm, profile.useImperial);
+  const efficiencyDisplay = `${(profile.efficiency * 100).toFixed(1)}%`;
+  const activityDisplay = profile.activityFactorDefault.toFixed(2);
+  const weeklyGoalKcal = Math.round(profile.targetKgPerWeek * profile.kcalPerKg);
+  const weeklyGoalDisplay = `${weeklyGoalKcal.toLocaleString()} kcal deficit`;
 
   const lastSyncLabel = lastSyncISO
     ? new Date(lastSyncISO).toLocaleString()
@@ -34,23 +71,23 @@ export function OnboardingPage() {
             </div>
             <div className="flex justify-between">
               <dt>Weight</dt>
-              <dd>{profile.weight_kg.toFixed(1)} kg</dd>
+              <dd>{weightDisplay}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Height</dt>
-              <dd>{profile.height_cm.toFixed(0)} cm</dd>
+              <dd>{heightDisplay}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Efficiency</dt>
-              <dd>{(profile.efficiency * 100).toFixed(1)}%</dd>
+              <dd>{efficiencyDisplay}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Activity factor</dt>
-              <dd>{profile.activityFactorDefault.toFixed(2)}</dd>
+              <dd>{activityDisplay}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Weekly goal</dt>
-              <dd>{(profile.targetKgPerWeek * profile.kcalPerKg).toFixed(0)} kcal deficit</dd>
+              <dd>{weeklyGoalDisplay}</dd>
             </div>
           </dl>
         </div>

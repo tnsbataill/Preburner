@@ -2,6 +2,13 @@ import { usePlannerStore } from '../state/plannerStore.js';
 
 const LB_PER_KG = 2.2046226218;
 
+function formatNumber(value: number, fractionDigits = 0): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
 function formatDelta(value: number, useImperial: boolean): string {
   const converted = useImperial ? value * LB_PER_KG : value;
   const magnitude = Math.abs(converted).toFixed(1);
@@ -21,10 +28,73 @@ function formatDate(iso: string) {
   });
 }
 
+function toCsvCell(value: unknown): string {
+  if (value === undefined || value === null) {
+    return '""';
+  }
+  const text = String(value).replace(/"/g, '""');
+  return `"${text}"`;
+}
+
 export function WeeklyPage() {
   const weekly = usePlannerStore((state) => state.weekly);
   const weightSummary = usePlannerStore((state) => state.weightSummary);
   const useImperial = usePlannerStore((state) => state.profile.useImperial);
+
+  const handleExport = (format: 'json' | 'csv') => {
+    if (typeof window === 'undefined' || weekly.length === 0) {
+      return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(weekly, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `preburner-weekly-${timestamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const header = [
+      'weekKey',
+      'weekStartISO',
+      'weekEndISO',
+      'weeklyTargetDeficit_kcal',
+      'weeklyAllocated_kcal',
+      'carryOver_kcal',
+      'protein_g',
+      'fat_g',
+      'carb_g',
+    ];
+    const rows = weekly.map((week) => [
+      week.weekKey,
+      week.weekStartISO,
+      week.weekEndISO,
+      week.weeklyTargetDeficit_kcal,
+      week.weeklyAllocated_kcal,
+      week.carryOver_kcal ?? '',
+      week.macros.protein_g.toFixed(1),
+      week.macros.fat_g.toFixed(1),
+      week.macros.carb_g.toFixed(1),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map(toCsvCell).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `preburner-weekly-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <section className="space-y-6">
@@ -34,6 +104,24 @@ export function WeeklyPage() {
           Compare the target deficit against allocations from each window. When sliders adjust macro rules or deficits,
           the bars update instantly.
         </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => handleExport('json')}
+            className="screen-only rounded-md border border-emerald-400/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition-colors hover:bg-emerald-400/10"
+            disabled={weekly.length === 0}
+          >
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExport('csv')}
+            className="screen-only rounded-md border border-emerald-400/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition-colors hover:bg-emerald-400/10"
+            disabled={weekly.length === 0}
+          >
+            Export CSV
+          </button>
+        </div>
       </header>
 
       <div
@@ -91,7 +179,7 @@ export function WeeklyPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
                   <span>Deficit placement</span>
-                  <span className="font-semibold text-slate-200">{week.weeklyAllocated_kcal.toFixed(0)} / {target.toFixed(0)} kcal</span>
+                  <span className="font-semibold text-slate-200">{formatNumber(week.weeklyAllocated_kcal)} / {formatNumber(target)} kcal</span>
                 </div>
                 <div className="h-3 rounded-full bg-slate-800">
                   <div
@@ -102,21 +190,21 @@ export function WeeklyPage() {
               </div>
 
               {week.carryOver_kcal ? (
-                <p className="text-xs text-slate-400">Carryover: {week.carryOver_kcal.toFixed(0)} kcal</p>
+                <p className="text-xs text-slate-400">Carryover: {formatNumber(week.carryOver_kcal)} kcal</p>
               ) : null}
 
               <dl className="grid grid-cols-2 gap-2 text-xs text-slate-300">
                 <div>
                   <dt className="uppercase tracking-wide text-slate-500">Protein</dt>
-                  <dd>{week.macros.protein_g.toFixed(1)} g</dd>
+                  <dd>{formatNumber(week.macros.protein_g, 1)} g</dd>
                 </div>
                 <div>
                   <dt className="uppercase tracking-wide text-slate-500">Fat</dt>
-                  <dd>{week.macros.fat_g.toFixed(1)} g</dd>
+                  <dd>{formatNumber(week.macros.fat_g, 1)} g</dd>
                 </div>
                 <div className="col-span-2">
                   <dt className="uppercase tracking-wide text-slate-500">Carbs</dt>
-                  <dd>{week.macros.carb_g.toFixed(1)} g</dd>
+                  <dd>{formatNumber(week.macros.carb_g, 1)} g</dd>
                 </div>
               </dl>
             </article>

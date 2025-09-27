@@ -37,6 +37,7 @@ export interface PlannedWorkout {
   source: 'intervals' | 'file';
   title?: string;
   type: SessionType;
+  originalType?: SessionType;
   startISO: string;
   endISO: string;
   duration_hr: number;

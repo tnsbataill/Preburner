@@ -12,6 +12,7 @@ const MS_PER_HOUR = 1000 * 60 * 60;
 const SECONDS_PER_HOUR = 60 * 60;
 
 const HARD_SESSION_TYPES: SessionType[] = ['Threshold', 'VO2', 'Race'];
+const KCAL_PER_KJ = 1 / 4.184;
 
 function toDate(iso: string): Date {
   return new Date(iso);
@@ -148,7 +149,7 @@ export function buildWindows(profile: Profile, workouts: PlannedWorkout[]): Wind
     const dateKey = formatDateKey(prev ? prev.endISO : next.startISO);
     const activityFactor = profile.activityFactorOverrides?.[dateKey] ?? profile.activityFactorDefault;
     const restingKcal = rmr * (windowHours / 24) * activityFactor;
-    const exerciseKcal = estimateWorkoutKilojoules(next) / profile.efficiency;
+    const exerciseKcal = (estimateWorkoutKilojoules(next) / profile.efficiency) * KCAL_PER_KJ;
     const needKcal = restingKcal + exerciseKcal;
     const carbPlan = computeCarbPlan(profile, next, needKcal);
     const notes: string[] = [];

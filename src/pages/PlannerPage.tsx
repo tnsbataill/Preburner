@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { estimateWorkoutKilojoules } from '../calc/prescribe.js';
 import { usePlannerStore } from '../state/plannerStore.js';
+import type { SessionType } from '../types.js';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -19,6 +20,11 @@ export function PlannerPage() {
   const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
   const syncError = usePlannerStore((state) => state.syncError);
   const isRefreshing = usePlannerStore((state) => state.isRefreshing);
+  const setWorkoutType = usePlannerStore((state) => state.setWorkoutType);
+  const resetWorkoutType = usePlannerStore((state) => state.resetWorkoutType);
+
+  const sessionTypes: SessionType[] = ['Endurance', 'Tempo', 'Threshold', 'VO2', 'Race', 'Rest'];
+  const idPrefix = useId();
 
   const totalPlannedKj = useMemo(
     () =>
@@ -68,8 +74,11 @@ export function PlannerPage() {
             const plannedValue = hasDirectPlanned
               ? workout.planned_kJ!
               : estimateWorkoutKilojoules(workout);
-            const plannedKjDisplay = Math.round(plannedValue);
+            const plannedKjDisplay = Math.round(plannedValue).toLocaleString();
             const ftpDisplay = workout.ftp_watts_at_plan ?? profile.ftp_watts;
+            const selectId = `${idPrefix}-${workout.id}-session-type`;
+            const overrideActive =
+              typeof workout.originalType === 'string' && workout.originalType !== workout.type;
 
             return (
               <article
@@ -94,6 +103,44 @@ export function PlannerPage() {
                     <dd>{kjSource}</dd>
                   </div>
                 </dl>
+                <div className="space-y-2 rounded-md border border-slate-800/60 bg-slate-950/50 p-3">
+                  <div className="flex items-center justify-between text-[0.7rem] uppercase tracking-wide text-slate-500">
+                    <label htmlFor={selectId}>Session type</label>
+                    {overrideActive ? (
+                      <span className="font-semibold text-amber-300">Override</span>
+                    ) : (
+                      <span className="font-semibold text-slate-400">Default</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select
+                      id={selectId}
+                      className="flex-1 rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-100"
+                      value={workout.type}
+                      onChange={(event) => setWorkoutType(workout.id, event.target.value as SessionType)}
+                    >
+                      {sessionTypes.map((sessionType) => (
+                        <option key={sessionType} value={sessionType}>
+                          {sessionType}
+                        </option>
+                      ))}
+                    </select>
+                    {overrideActive ? (
+                      <button
+                        type="button"
+                        onClick={() => resetWorkoutType(workout.id)}
+                        className="rounded-md border border-amber-400/60 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200 transition-colors hover:bg-amber-400/10"
+                      >
+                        Reset to {workout.originalType}
+                      </button>
+                    ) : null}
+                  </div>
+                  {overrideActive ? (
+                    <p className="text-[0.65rem] text-amber-300">
+                      Original type: {workout.originalType}
+                    </p>
+                  ) : null}
+                </div>
               </article>
             );
           })}
