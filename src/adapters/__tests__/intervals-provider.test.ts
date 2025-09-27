@@ -25,7 +25,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({
           id: '0',
           ftp: 260,
@@ -125,16 +125,33 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({
           id: '0',
           profile: {
+            identity: {
+              bio: {
+                sex: 'Female',
+              },
+              birth: {
+                birth_date: '1995-04-15',
+              },
+            },
+            physiology: {
+              metrics: {
+                height_cm: '172.5',
+                weight_kg: '68.5',
+              },
+            },
             ftp: 275,
-            weight_kg: '68.5',
-            height_cm: '172.5',
-            sex: 'Female',
-            birth_date: '1995-04-15',
-            use_imperial: false,
+            preferences: {
+              units: 'metric',
+            },
+          },
+          metrics: {
+            latest: {
+              use_imperial: false,
+            },
           },
         });
       }
@@ -152,6 +169,10 @@ describe('IntervalsProvider', () => {
             planned_duration_total: 3600,
           },
         ]);
+      }
+
+      if (path === '/api/v1/athlete/0/events/11.json?resolve=true') {
+        return buildJsonResponse({ id: 11, files: [] });
       }
 
       throw new Error(`Unexpected fetch to ${path}`);
@@ -182,7 +203,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({ id: '0', ftp: 250 });
       }
 
@@ -234,7 +255,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({ id: 0, ftp: 250 });
       }
 
@@ -286,7 +307,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({ id: '0', ftp: 255 });
       }
 
@@ -341,7 +362,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({ id: '0', ftp: 280 });
       }
 
@@ -382,7 +403,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete/0.json') {
+      if (path === '/api/v1/athlete/0') {
         return buildJsonResponse({ id: '0', ftp: null });
       }
 
@@ -428,7 +449,7 @@ describe('IntervalsProvider', () => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = `${url.pathname}${url.search}`;
 
-      if (path === '/api/v1/athlete.json') {
+      if (path === '/api/v1/athlete') {
         return new Response('Method Not Allowed', {
           status: 405,
           statusText: 'Method Not Allowed',
@@ -449,7 +470,7 @@ describe('IntervalsProvider', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://intervals.icu/api/v1/athlete.json',
+      'https://intervals.icu/api/v1/athlete',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: expect.any(String) }),
       }),

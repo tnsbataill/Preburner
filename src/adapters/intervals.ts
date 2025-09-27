@@ -221,14 +221,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function gatherAthleteRecords(athlete: IntervalsAthleteResponse): Record<string, unknown>[] {
-  const records: Record<string, unknown>[] = [athlete as unknown as Record<string, unknown>];
-  const nestedCandidates = [athlete.profile, athlete.metrics];
-  for (const candidate of nestedCandidates) {
-    if (isRecord(candidate)) {
-      records.push(candidate);
+function collectNestedRecords(input: Record<string, unknown>, seen: WeakSet<object>): Record<string, unknown>[] {
+  if (seen.has(input)) {
+    return [];
+  }
+  seen.add(input);
+  const collected: Record<string, unknown>[] = [input];
+
+  for (const value of Object.values(input)) {
+    if (isRecord(value)) {
+      collected.push(...collectNestedRecords(value, seen));
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isRecord(item)) {
+          collected.push(...collectNestedRecords(item, seen));
+        }
+      }
     }
   }
+
+  return collected;
+}
+
+function gatherAthleteRecords(athlete: IntervalsAthleteResponse): Record<string, unknown>[] {
+  const seen = new WeakSet<object>();
+  const records: Record<string, unknown>[] = [];
+
+  const addRecords = (value: unknown) => {
+    if (isRecord(value)) {
+      records.push(...collectNestedRecords(value, seen));
+    }
+  };
+
+  addRecords(athlete as unknown as Record<string, unknown>);
+  addRecords(athlete.profile);
+  addRecords(athlete.metrics);
+
   return records;
 }
 
@@ -1095,7 +1123,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
       try {
         const label = this.athleteId === 0 ? 'current athlete (0)' : `athlete profile ${this.athleteId}`;
         this.log('info', `Refreshing ${label}`);
-        await this.loadAthleteProfile(`/athlete/${this.athleteId}.json`);
+        await this.loadAthleteProfile(`/athlete/${this.athleteId}`);
         this.logLoadedAthlete();
       } catch (error) {
         const detail = error instanceof Error ? error.message : undefined;
@@ -1107,7 +1135,7 @@ export class IntervalsProvider implements PlannedWorkoutProvider {
     // No athleteId supplied—attempt automatic lookup (may 405).
     this.log('info', 'Loading Intervals.icu athlete profile');
     try {
-      await this.loadAthleteProfile('/athlete.json');
+      await this.loadAthleteProfile('/athlete');
       this.logLoadedAthlete();
     } catch (error) {
       const detail = error instanceof Error ? error.message : undefined;

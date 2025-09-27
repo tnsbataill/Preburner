@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { usePlannerStore } from '../state/plannerStore.js';
 import { OverridesControls } from './OverridesControls.js';
 
@@ -11,6 +11,29 @@ export function SettingsPanel() {
   const lastSyncISO = usePlannerStore((state) => state.lastSyncISO);
   const syncError = usePlannerStore((state) => state.syncError);
   const syncLog = usePlannerStore((state) => state.syncLog);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+
+  const handleCopySyncLog = async () => {
+    if (syncLog.length === 0) {
+      return;
+    }
+    const text = syncLog
+      .map((entry) => {
+        const timestamp = new Date(entry.timestamp).toISOString();
+        const detail = entry.detail ? `\n  detail: ${entry.detail}` : '';
+        return `time: ${timestamp}\n  level: ${entry.level}\n  message: ${entry.message}${detail}`;
+      })
+      .join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 2000);
+    } catch (error) {
+      console.warn('Unable to copy sync log', error);
+      setCopyState('error');
+      setTimeout(() => setCopyState('idle'), 2000);
+    }
+  };
 
   const levelClasses: Record<'info' | 'warn' | 'error', string> = {
     info: 'text-slate-300',
@@ -158,9 +181,18 @@ export function SettingsPanel() {
             ) : null}
             {syncLog.length > 0 ? (
               <div className="mt-3 space-y-2">
-                <h4 className="text-[0.6rem] font-semibold uppercase tracking-wide text-slate-500">
-                  Sync log
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[0.6rem] font-semibold uppercase tracking-wide text-slate-500">
+                    Sync log
+                  </h4>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-[0.55rem] font-semibold uppercase tracking-wide text-slate-200 hover:bg-slate-700"
+                    onClick={handleCopySyncLog}
+                  >
+                    Copy
+                  </button>
+                </div>
                 <ul className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-800/60 bg-slate-950/40 p-2">
                   {syncLog.map((entry, index) => (
                     <li
@@ -179,6 +211,15 @@ export function SettingsPanel() {
                     </li>
                   ))}
                 </ul>
+                {copyState !== 'idle' ? (
+                  <p
+                    className={`text-[0.55rem] ${
+                      copyState === 'copied' ? 'text-emerald-300' : 'text-rose-300'
+                    }`}
+                  >
+                    {copyState === 'copied' ? 'Sync log copied to clipboard' : 'Unable to copy sync log'}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>

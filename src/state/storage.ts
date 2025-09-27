@@ -1,4 +1,4 @@
-import type { PlannedWorkout, WeightEntry } from '../types.js';
+import type { PlannedWorkout, Profile, WeightEntry } from '../types.js';
 import type { PlannerOverrides } from './types.js';
 
 interface SettingsRecord {
@@ -20,6 +20,8 @@ interface WorkoutCacheRecord {
   endISO: string;
   workouts: PlannedWorkout[];
   fetchedISO: string;
+  profile?: CachedProfileUpdate;
+  weights?: WeightEntry[];
 }
 
 interface WeightRecord {
@@ -38,6 +40,17 @@ export interface StoredIntervalsSettings {
 export interface StoredWorkoutCache {
   workouts: PlannedWorkout[];
   fetchedISO: string;
+  profile?: CachedProfileUpdate;
+  weights?: WeightEntry[];
+}
+
+export interface CachedProfileUpdate {
+  sex?: Profile['sex'];
+  age_years?: number;
+  height_cm?: number;
+  weight_kg?: number;
+  ftp_watts?: number;
+  useImperial?: boolean;
 }
 
 type PlannerDatabase = import('dexie').Dexie;
@@ -146,6 +159,8 @@ export async function loadCachedWorkouts(
   return {
     workouts: record.workouts,
     fetchedISO: record.fetchedISO,
+    profile: record.profile,
+    weights: record.weights,
   };
 }
 
@@ -154,6 +169,8 @@ export async function persistCachedWorkouts(
   endISO: string,
   workouts: PlannedWorkout[],
   fetchedISO: string,
+  profile?: CachedProfileUpdate,
+  weights?: WeightEntry[],
 ): Promise<void> {
   const db = await getDatabase();
   if (!db) {
@@ -167,6 +184,8 @@ export async function persistCachedWorkouts(
     endISO,
     workouts,
     fetchedISO,
+    profile,
+    weights,
   });
 }
 
