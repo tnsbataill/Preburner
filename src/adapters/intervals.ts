@@ -516,14 +516,16 @@ function estimateFromTss(
 }
 
 function sumStepKilojoules(steps: Step[], ftp: number | undefined): number | undefined {
-  if (!ftp || steps.length === 0) return undefined;
+  if (steps.length === 0) return undefined;
+  const requiresFtp = steps.some((step) => step.target_type === '%FTP');
+  if (requiresFtp && !ftp) return undefined;
   let total = 0;
   for (const step of steps) {
     if (step.target_type === '%FTP') {
       const lo = step.target_lo ?? step.target_hi ?? 0;
       const hi = step.target_hi ?? step.target_lo ?? 0;
       const pct = (lo + hi) / 2 / 100;
-      total += pct * ftp * step.duration_s;
+      total += pct * (ftp ?? 0) * step.duration_s;
     } else if (step.target_type === 'Watts') {
       const lo = step.target_lo ?? step.target_hi ?? 0;
       const hi = step.target_hi ?? step.target_lo ?? 0;
@@ -772,41 +774,55 @@ function extractPlannedKilojoules(
     return { planned_kJ: joules / 1000, source: 'ICU Structured' };
   }
 
+  let fallback: PlannedKilojoulesResult | undefined;
+
+  if (steps && steps.length > 0) {
+    const estimated = sumStepKilojoules(steps, ftp);
+    if (typeof estimated === 'number') {
+      fallback = { planned_kJ: estimated, source: 'Estimated (steps)' };
+    }
+  }
+
+  const icuIntensityPct = toFiniteNumber((event as any).icu_intensity);
+  const icuTrainingLoad = toFiniteNumber((event as any).icu_training_load);
+  const plannedIntensityFactor = toFiniteNumber(event.planned_intensity_factor);
+
+  if (!fallback && typeof ftp === 'number' && durationHr > 0) {
+    const intensity =
+      typeof icuIntensityPct === 'number' && icuIntensityPct > 0
+        ? icuIntensityPct / 100
+        : plannedIntensityFactor;
+    if (typeof intensity === 'number' && intensity > 0) {
+      const fromIf = estimateFromIf(ftp, intensity, durationHr);
+      if (typeof fromIf === 'number') {
+        fallback = { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
+      }
+    }
+
+    if (!fallback) {
+      const tssCandidates = [
+        icuTrainingLoad,
+        toFiniteNumber(event.planned_tss),
+        toFiniteNumber((event as any).plannedTss),
+      ];
+      for (const tssCandidate of tssCandidates) {
+        if (typeof tssCandidate !== 'number' || tssCandidate <= 0) continue;
+        const fromTss = estimateFromTss(ftp, tssCandidate, durationHr);
+        if (typeof fromTss === 'number') {
+          fallback = { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
+          break;
+        }
+      }
+    }
+  }
+
   const desc = typeof event.description === 'string' ? event.description : undefined;
   const fromDescription = parseKjFromDescription(desc);
   if (typeof fromDescription === 'number') {
     return { planned_kJ: fromDescription, source: 'Description' };
   }
 
-  if (steps && steps.length > 0) {
-    const estimated = sumStepKilojoules(steps, ftp);
-    if (typeof estimated === 'number') return { planned_kJ: estimated, source: 'Estimated (steps)' };
-  }
-
-  const icuIntensityPct = toFiniteNumber((event as any).icu_intensity);
-  const icuTrainingLoad = toFiniteNumber((event as any).icu_training_load);
-  if (typeof ftp === 'number' && durationHr > 0) {
-    const intensityCandidates = [
-      typeof icuIntensityPct === 'number' && icuIntensityPct > 0 ? icuIntensityPct / 100 : undefined,
-      toFiniteNumber(event.planned_intensity_factor),
-    ];
-    for (const intensity of intensityCandidates) {
-      const fromIf = estimateFromIf(ftp, intensity, durationHr);
-      if (typeof fromIf === 'number') {
-        return { planned_kJ: fromIf, source: 'Estimated (IF/TSS)' };
-      }
-    }
-
-    const tssCandidates = [event.planned_tss, (event as any).plannedTss, icuTrainingLoad];
-    for (const tssCandidate of tssCandidates) {
-      const fromTss = estimateFromTss(ftp, toFiniteNumber(tssCandidate), durationHr);
-      if (typeof fromTss === 'number') {
-        return { planned_kJ: fromTss, source: 'Estimated (IF/TSS)' };
-      }
-    }
-  }
-
-  return { planned_kJ: undefined, source: 'Estimated (fallback)' };
+  return fallback ?? { planned_kJ: undefined, source: 'Estimated (fallback)' };
 }
 
 async function fetchStructuredFile(

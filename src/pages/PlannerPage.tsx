@@ -62,9 +62,12 @@ export function PlannerPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {workouts.map((workout) => {
-            const plannedValue =
-              typeof workout.planned_kJ === 'number' ? workout.planned_kJ : estimateWorkoutKilojoules(workout);
-            const kjSource = workout.kj_source ?? 'Estimated (fallback)';
+            const hasDirectPlanned =
+              typeof workout.planned_kJ === 'number' && workout.kj_source !== 'Estimated (fallback)';
+            const kjSource = workout.kj_source ?? (hasDirectPlanned ? 'ICU Structured' : 'Estimated (fallback)');
+            const plannedValue = hasDirectPlanned
+              ? workout.planned_kJ!
+              : estimateWorkoutKilojoules(workout);
             const plannedKjDisplay = Math.round(plannedValue);
             const ftpDisplay = workout.ftp_watts_at_plan ?? profile.ftp_watts;
 

@@ -308,6 +308,52 @@ describe('IntervalsProvider', () => {
     expect(workout.steps).toBeUndefined();
   });
 
+  it('computes planned kJ from watt-targeted steps even without FTP context', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const path = `${url.pathname}${url.search}`;
+
+      if (path === '/api/v1/athlete/0') {
+        return buildJsonResponse({ id: '0', ftp: null });
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/wellness.json')) {
+        return buildJsonResponse([]);
+      }
+
+      if (path.startsWith('/api/v1/athlete/0/events.json')) {
+        return buildJsonResponse([
+          {
+            id: 909,
+            title: 'ERG Tempo',
+            start_date: '2024-10-01T09:00:00Z',
+            category: 'WORKOUT',
+            steps: [
+              { duration: 600, target_type: 'Watts', target_lo: 250, target_hi: 250 },
+              { duration: 900, target_type: 'Watts', target_lo: 200, target_hi: 200 },
+            ],
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch to ${path}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createIntervalsProvider('abc123', undefined, { athleteId: 0 });
+
+    const workouts = await provider.getPlannedWorkouts(
+      '2024-09-30T00:00:00.000Z',
+      '2024-10-02T00:00:00.000Z',
+    );
+
+    expect(workouts).toHaveLength(1);
+    const [workout] = workouts;
+    expect(workout.planned_kJ).toBeCloseTo((250 * 600 + 200 * 900) / 1000, 1);
+    expect(workout.kj_source).toBe('Estimated (steps)');
+  });
+
   it('suggests entering athlete id when automatic lookup is rejected', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === 'string' ? input : input.toString());
