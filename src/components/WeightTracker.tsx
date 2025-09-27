@@ -4,6 +4,14 @@ import { usePlannerStore, type WeightTrendPoint } from '../state/plannerStore.js
 
 const LB_PER_KG = 2.2046226218;
 
+type WeightTimeframe = '1m' | '3m' | '1y';
+
+const TIMEFRAME_OPTIONS: { id: WeightTimeframe; label: string; days: number }[] = [
+  { id: '1m', label: '1M', days: 30 },
+  { id: '3m', label: '3M', days: 90 },
+  { id: '1y', label: '1Y', days: 365 },
+];
+
 function toDisplay(weightKg: number, useImperial: boolean): number {
   return useImperial ? weightKg * LB_PER_KG : weightKg;
 }
@@ -54,6 +62,21 @@ function buildChart(points: WeightTrendPoint[]): ChartData | undefined {
   return { path, minKg, maxKg, actual };
 }
 
+function subtractDays(days: number): string {
+  const reference = new Date();
+  reference.setUTCDate(reference.getUTCDate() - days);
+  return reference.toISOString().slice(0, 10);
+}
+
+function filterTrend(points: WeightTrendPoint[], timeframe: WeightTimeframe): WeightTrendPoint[] {
+  const option = TIMEFRAME_OPTIONS.find((item) => item.id === timeframe);
+  if (!option) {
+    return points;
+  }
+  const threshold = subtractDays(option.days);
+  return points.filter((point) => point.dateISO >= threshold);
+}
+
 export function WeightTracker() {
   const status = usePlannerStore((state) => state.status);
   const weights = usePlannerStore((state) => state.weights);
@@ -65,8 +88,11 @@ export function WeightTracker() {
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [entryValue, setEntryValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<WeightTimeframe>('3m');
 
-  const chart = useMemo(() => buildChart(weightTrend), [weightTrend]);
+  const filteredTrend = useMemo(() => filterTrend(weightTrend, timeframe), [timeframe, weightTrend]);
+  const chart = useMemo(() => buildChart(filteredTrend), [filteredTrend]);
+  const hasAnyTrend = weightTrend.length >= 2;
   const recentEntries = useMemo(() => [...weights].slice(-7).reverse(), [weights]);
 
   const unitLabel = useImperial ? 'lb' : 'kg';
@@ -139,6 +165,25 @@ export function WeightTracker() {
 
       <div className="space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-300">7-day rolling trend</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-[0.65rem] uppercase tracking-wide text-slate-500">Timeframe</span>
+          <div className="flex gap-1">
+            {TIMEFRAME_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setTimeframe(option.id)}
+                className={`rounded border px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-wide transition-colors ${
+                  timeframe === option.id
+                    ? 'border-emerald-500/60 bg-emerald-500 text-slate-900'
+                    : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {chart ? (
           <div className="space-y-2">
             <div className="flex justify-between text-[0.65rem] uppercase tracking-wide text-slate-500">
@@ -165,7 +210,9 @@ export function WeightTracker() {
             <p className="text-[0.65rem] text-slate-400">Line = 7-day average • Dots = logged weights.</p>
           </div>
         ) : (
-          <p className="text-[0.7rem] text-slate-400">Enter at least two weights to plot the rolling average.</p>
+          <p className="text-[0.7rem] text-slate-400">
+            {hasAnyTrend ? 'Not enough data in the selected timeframe.' : 'Enter at least two weights to plot the rolling average.'}
+          </p>
         )}
       </div>
 
