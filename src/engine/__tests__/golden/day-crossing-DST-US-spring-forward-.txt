@@ -1,0 +1,11 @@
+2026-03-08 [high → tomorrow rest]
+  energy: tdee 3970 (bmr 1693 + neat 592 + ex 1685) target 3983 deficit -13 EA 32
+  macros: C 656g (8.7 g/kg)  P 135g  F 91g
+  workout: 8am Long ride 3h Endurance IF 0.68 1814kJ load 139
+    6:45am           Breakfast · pre-ride               C  45 P  11 F   2   242kcal
+    7:45am           Pre-ride bite (optional)           C  19 P   0 F   0    76kcal
+    8am–11am         Long ride                          C 210 P   0 F   0   840kcal  [70 g/h, 650 ml/h, 650 mg Na/h]
+    11:45am          Lunch · recovery                   C 159 P  37 F  22   982kcal
+    3:15pm           Snack                              C  63 P  17 F  15   455kcal
+    6:45pm           Dinner                             C 139 P  37 F  37  1037kcal
+    9:45pm           Before bed                         C  21 P  33 F  15   351kcal

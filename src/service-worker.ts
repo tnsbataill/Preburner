@@ -2,8 +2,8 @@
 
 declare const self: ServiceWorkerGlobalScope;
 
-const APP_SHELL_CACHE = 'preburner-shell-v1';
-const DATA_CACHE = 'preburner-data-v1';
+const APP_SHELL_CACHE = 'preburner-shell-v2';
+const DATA_CACHE = 'preburner-data-v2';
 const APP_SHELL_ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const OFFLINE_PLAN_PATH = 'offline-plan.json';
 

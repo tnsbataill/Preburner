@@ -1,0 +1,10 @@
+2026-03-04 [moderate → tomorrow rest]
+  energy: tdee 2962 (bmr 1693 + neat 592 + ex 677) target 2949 deficit 13 EA 34
+  macros: C 403g (5.4 g/kg)  P 134g  F 89g
+  workout: 12pm Lunch tempo 1h Tempo IF 0.80 711kJ load 64
+    7:15am           Breakfast · pre-ride               C 118 P  29 F  13   705kcal
+    11am             Pre-ride snack                     C  26 P   0 F   0   104kcal
+    12pm–1pm         Lunch tempo                        C  25 P   0 F   0   100kcal  [25 g/h, 650 ml/h, 650 mg Na/h]
+    1:30pm           Lunch · recovery                   C 110 P  36 F  23   791kcal
+    6:45pm           Dinner                             C 108 P  36 F  38   918kcal
+    9:45pm           Before bed                         C  16 P  33 F  15   331kcal

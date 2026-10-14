@@ -1,0 +1,11 @@
+2026-03-02 [moderate → tomorrow rest]
+  energy: tdee 2987 (bmr 1693 + neat 592 + ex 702) target 2990 deficit -3 EA 34
+  macros: C 410g (5.5 g/kg)  P 135g  F 90g
+  workout: 6:45am Early endurance 1h15 Endurance IF 0.68 756kJ load 58
+    6:15am           Pre-ride snack                     C  26 P   0 F   0   104kcal
+    6:45am–8am       Early endurance                    C  63 P   0 F   0   252kcal  [50 g/h, 650 ml/h, 650 mg Na/h]
+    8:30am           Breakfast · recovery               C  97 P  31 F  16   656kcal
+    12:30pm          Lunch                              C  86 P  31 F  26   702kcal
+    3:45pm           Snack                              C  39 P  14 F  11   311kcal
+    6:45pm           Dinner                             C  86 P  31 F  26   702kcal
+    9:45pm           Before bed                         C  13 P  28 F  11   263kcal
