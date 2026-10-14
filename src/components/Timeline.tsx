@@ -97,11 +97,7 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
   return (
     <div
       ref={ref}
-      role="button"
-      tabIndex={0}
-      aria-expanded={open}
       onClick={setOpenToggle}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpenToggle())}
       className={cx('card group cursor-pointer p-3.5 transition hover:border-line hover:bg-raised/40 sm:p-4', eaten && 'opacity-60', peri && 'border-l-[3px]', flash && 'ring-2 ring-ember/70')}
       style={peri ? { borderLeftColor: SLOT_ACCENT[slot.kind] } : undefined}
     >
@@ -120,7 +116,6 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
             stop(e);
             toggle(key);
           }}
-          onKeyDown={stop}
           aria-label={eaten ? 'Mark not eaten' : 'Mark eaten'}
           className={cx(
             'grid h-8 w-8 shrink-0 place-items-center rounded-full border transition',
@@ -130,10 +125,17 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
           <Check size={16} strokeWidth={2.5} />
         </button>
       </div>
-      <div className="mt-2 flex items-center gap-1 text-xs text-muted group-hover:text-ink">
+      <button
+        aria-expanded={open}
+        onClick={(e) => {
+          stop(e);
+          setOpenToggle();
+        }}
+        className="mt-2 flex items-center gap-1 text-xs text-muted group-hover:text-ink"
+      >
         <ChevronDown size={14} className={cx('transition', open && 'rotate-180')} />
         {open ? 'Less' : 'Why & ideas'}
-      </div>
+      </button>
       {open && (
         <div className="mt-2 space-y-2 animate-fade-up">
           <p className="text-sm text-muted">{slot.rationale}</p>
@@ -186,11 +188,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
   return (
     <div
       ref={ref}
-      role="button"
-      tabIndex={0}
-      aria-expanded={open}
       onClick={toggle}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle())}
       className={cx('card group relative cursor-pointer overflow-hidden p-4 transition hover:brightness-110', flash && 'ring-2 ring-ember/70')}
       style={{ borderColor: `color-mix(in srgb, ${color} 35%, transparent)` }}
     >
@@ -205,7 +203,17 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
           <div className="flex items-center gap-1.5">
             <Chip color={color}>{workout.intensity}</Chip>
             {workout.completed && <Chip color="rgb(var(--good))">done</Chip>}
-            <ExpandHint open={open} />
+            <button
+              aria-expanded={open}
+              aria-label={open ? 'Hide session details' : 'Show session details'}
+              onClick={(e) => {
+                stop(e);
+                toggle();
+              }}
+              className="rounded-md p-0.5"
+            >
+              <ExpandHint open={open} />
+            </button>
           </div>
         </div>
         <div className="num mt-1 flex flex-wrap gap-x-3 text-xs text-muted">
@@ -215,7 +223,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
           <span>load {workout.load}</span>
         </div>
         {workout.timeAssumed && !workout.completed && (
-          <button onClick={(e) => (stop(e), setEditing(true))} onKeyDown={stop} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-warn/50 px-2 py-1 text-xs text-warn hover:bg-warn/10">
+          <button onClick={(e) => (stop(e), setEditing(true))} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-warn/50 px-2 py-1 text-xs text-warn hover:bg-warn/10">
             <Clock size={12} /> Time assumed — set the real start
           </button>
         )}
@@ -265,7 +273,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
             <p className="text-sm text-muted">{slot.rationale}</p>
             <StepProfile workout={workout} color={color} />
             {description && <p className="line-clamp-4 text-xs text-faint">{description}</p>}
-            <div className="flex flex-wrap items-center" onClick={stop} onKeyDown={stop}>
+            <div className="flex flex-wrap items-center" onClick={stop}>
               {!workout.timeAssumed && !workout.completed && (
                 <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink">
                   <Pencil size={11} /> Change time
@@ -276,7 +284,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
           </div>
         )}
       </div>
-      <div onClick={stop} onKeyDown={stop}>
+      <div onClick={stop}>
         <WorkoutTimeSheet open={editing} onClose={() => setEditing(false)} workout={workout} />
       </div>
     </div>
