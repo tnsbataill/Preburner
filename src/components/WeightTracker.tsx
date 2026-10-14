@@ -231,23 +231,32 @@ export function WeightTracker() {
                 <span className="font-mono text-sm text-slate-100">
                   {formatWeight(entry.weight_kg, useImperial)} {unitLabel}
                 </span>
-                {entry.source === 'intervals' ? (
-                  <span className="text-[0.6rem] uppercase tracking-wide text-emerald-300">Synced</span>
-                ) : (
+                <div className="flex items-center gap-2">
+                  {entry.source === 'intervals' ? (
+                    <span className="text-[0.6rem] uppercase tracking-wide text-emerald-300">Synced</span>
+                  ) : (
+                    <span className="text-[0.6rem] uppercase tracking-wide text-slate-500">Manual</span>
+                  )}
                   <button
                     type="button"
-                    className="text-[0.65rem] font-semibold uppercase tracking-wide text-rose-300 hover:text-rose-200"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[0.6rem] text-slate-400 transition-colors hover:text-rose-300 focus:outline-none focus-visible:ring-1 focus-visible:ring-rose-400"
+                    aria-label="Delete weight entry"
                     onClick={() => deleteWeight(entry.dateISO)}
                   >
-                    Remove
+                    <span aria-hidden="true">x</span>
                   </button>
-                )}
+                </div>
               </li>
             ))}
           </ul>
         ) : (
           <p className="text-[0.7rem] text-slate-400">No weights logged yet.</p>
         )}
+        {recentEntries.length > 0 ? (
+          <p className="text-[0.6rem] text-slate-500">
+            Deleted synced entries return the next time you refresh from Intervals.icu.
+          </p>
+        ) : null}
       </div>
     </section>
   );

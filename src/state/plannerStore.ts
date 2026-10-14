@@ -33,6 +33,7 @@ import type { PlannerOverrides, PlannerPage, PlannerStatus } from './types.js';
 const SAMPLE_START_ISO = '2024-06-10T00:00:00.000Z';
 const SAMPLE_END_ISO = '2024-06-20T00:00:00.000Z';
 const DEFAULT_RANGE_DAYS = 7;
+const SELECTED_PAGE_STORAGE_KEY = 'preburner:selectedPage';
 
 const EFFICIENCY_PRESET_VALUES: Record<EfficiencyPreset, number> = {
   WorldClass: 0.19,
@@ -128,6 +129,32 @@ function efficiencyFromPreset(preset: EfficiencyPreset): number {
   return EFFICIENCY_PRESET_VALUES[preset] ?? sampleProfile.efficiency;
 }
 
+const VALID_PAGES: PlannerPage[] = ['onboarding', 'timeline', 'weekly', 'athlete', 'settings'];
+
+function loadStoredPage(): PlannerPage {
+  if (typeof localStorage === 'undefined') {
+    return 'onboarding';
+  }
+  const stored = localStorage.getItem(SELECTED_PAGE_STORAGE_KEY);
+  if (stored && (VALID_PAGES as string[]).includes(stored)) {
+    return stored as PlannerPage;
+  }
+  return 'onboarding';
+}
+
+function persistPage(page: PlannerPage): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  try {
+    localStorage.setItem(SELECTED_PAGE_STORAGE_KEY, page);
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Failed to persist selected page', error);
+    }
+  }
+}
+
 function resolvePresetForEfficiency(value: number): EfficiencyPreset | undefined {
   const entries = Object.entries(EFFICIENCY_PRESET_VALUES) as [EfficiencyPreset, number][];
   for (const [preset, presetValue] of entries) {
@@ -180,12 +207,7 @@ function upsertWeightList(weights: WeightEntry[], entry: WeightEntry): WeightEnt
 
 function removeWeightByDate(weights: WeightEntry[], dateISO: string): WeightEntry[] {
   const normalized = normalizeDateKey(dateISO);
-  return weights.filter((entry) => {
-    if (normalizeDateKey(entry.dateISO) !== normalized) {
-      return true;
-    }
-    return entry.source === 'intervals';
-  });
+  return weights.filter((entry) => normalizeDateKey(entry.dateISO) !== normalized);
 }
 
 function mergeImportedWeights(existing: WeightEntry[], imported: WeightEntry[]): WeightEntry[] {
@@ -359,8 +381,21 @@ function applyWeightFlags(
     if (extraLossKg >= 0.35) {
       const latest = sorted[sorted.length - 1];
       const window = findWindowAfterDate(windows, latest.dateISO);
-      if (window && !window.notes.includes(WINDOW_UNDER_RECOVERY_FLAG)) {
-        window.notes.push(WINDOW_UNDER_RECOVERY_FLAG);
+      if (window) {
+        const diffMagnitude = Math.abs(extraLossKg);
+        const expectedMagnitude = Math.abs(summary.expectedDeltaKg);
+        const actualMagnitude = Math.abs(summary.actualDeltaKg);
+        const payload = [
+          diffMagnitude.toFixed(3),
+          expectedMagnitude.toFixed(3),
+          actualMagnitude.toFixed(3),
+        ].join(':');
+        const note = `${WINDOW_UNDER_RECOVERY_FLAG}:${payload}`;
+        const existingIndex = window.notes.findIndex((existing) => existing.startsWith(WINDOW_UNDER_RECOVERY_FLAG));
+        if (existingIndex >= 0) {
+          window.notes.splice(existingIndex, 1);
+        }
+        window.notes.push(note);
       }
     }
   }
@@ -580,7 +615,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
 
   return {
     status: 'idle',
-    page: 'onboarding',
+    page: loadStoredPage(),
     baseProfile: initialBaseProfile,
     profile: applyOverrides(initialBaseProfile, defaultOverrides),
     overrides: defaultOverrides,
@@ -742,7 +777,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       }
     },
     setPage(page) {
-      set({ page });
+      set((state) => {
+        if (state.page === page) {
+          return {};
+        }
+        persistPage(page);
+        return { page };
+      });
     },
     updateOverride(key, value) {
       const state = get();
@@ -801,7 +842,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
     },
     updateCarbSplit(part, value) {
       const state = get();
-      const split = { ...state.overrides.carbSplit, [part]: value } as Profile['carbSplit'];
+      const clamped = Math.max(0, Math.min(100, value));
+      const split = { ...state.overrides.carbSplit, [part]: clamped } as Profile['carbSplit'];
       const overrides = { ...state.overrides, carbSplit: split } as PlannerOverrides;
       const { profile, windows, weekly, weightSummary } = recomputePlan(
         state.baseProfile,
@@ -1063,13 +1105,10 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       let persisted: WeightEntry[] | undefined;
       set((state) => {
         const normalized = normalizeDateKey(dateISO);
-        const hasManual = state.weights.some(
-          (entry) => normalizeDateKey(entry.dateISO) === normalized && entry.source !== 'intervals',
-        );
-        if (!hasManual) {
+        const nextWeights = removeWeightByDate(state.weights, normalized);
+        if (nextWeights.length === state.weights.length) {
           return {};
         }
-        const nextWeights = removeWeightByDate(state.weights, dateISO);
         const nextBase = applyExternalProfile(state.baseProfile, undefined, latestWeightKg(nextWeights));
         const weightTrend = computeWeightTrend(nextWeights);
         const { profile, windows, weekly, weightSummary } = recomputePlan(

@@ -6,7 +6,12 @@ function cloneWindow(window: WindowPlan): WindowPlan {
     ...window,
     carbs: { ...window.carbs },
     macros: { ...window.macros },
-    notes: [...window.notes],
+    notes: window.notes.filter(
+      (note) =>
+        !note.startsWith('Deficit applied:') &&
+        !note.startsWith(DEFICIT_APPLIED_NOTE_PREFIX) &&
+        !note.startsWith(DEFICIT_MAXED_NOTE_PREFIX),
+    ),
   };
 }
 
@@ -39,6 +44,8 @@ function getIsoWeekInfo(dateISO: string) {
 
 export const WINDOW_EMPTY_FLAG = 'EMPTY_FLAG';
 export const WINDOW_UNDER_RECOVERY_FLAG = 'UNDER_RECOVERY_FLAG';
+export const DEFICIT_APPLIED_NOTE_PREFIX = 'DEFICIT_APPLIED:';
+export const DEFICIT_MAXED_NOTE_PREFIX = 'DEFICIT_MAXED:';
 
 export interface WeeklyResult {
   windows: WindowPlan[];
@@ -57,7 +64,7 @@ export function allocateWeeklyDeficits(
   const workoutMap = new Map(workouts.map((workout) => [workout.id, workout]));
   const clonedWindows = windows.map((window) => {
     const cloned = cloneWindow(window);
-    cloned.macros = computeMacroTargets(profile, cloned.target_kcal);
+    cloned.macros = computeMacroTargets(profile, cloned.target_kcal, cloned.workoutCarb_kcal);
     return cloned;
   });
   const grouped = new Map<string, WindowPlan[]>();
@@ -73,48 +80,94 @@ export function allocateWeeklyDeficits(
   const weeklyPlans: WeeklyPlan[] = [];
   const weekEntries = Array.from(grouped.entries()).sort(([aKey], [bKey]) => (aKey < bKey ? -1 : 1));
 
+  const EPSILON = 1e-3;
+
   for (const [weekKey, weekWindows] of weekEntries) {
     weekWindows.sort((a, b) => new Date(a.windowEndISO).getTime() - new Date(b.windowEndISO).getTime());
 
     const { weekStartISO, weekEndISO } = getIsoWeekInfo(weekWindows[0].windowEndISO);
-    const weeklyTarget = Math.abs(profile.targetKgPerWeek) * profile.kcalPerKg;
-    let remainingDeficit = weeklyTarget;
+    const weeklyTargetKcal = profile.targetKgPerWeek * profile.kcalPerKg;
+    const requestedDeficit = weeklyTargetKcal < -EPSILON ? -weeklyTargetKcal : 0;
 
-    const macroAccumulator = { protein_g: 0, fat_g: 0, carb_g: 0 };
-
-    for (const window of weekWindows) {
+    const pctCap = profile.windowPctCap ?? 0.3;
+    const entries = weekWindows.map((window) => {
       const nextWorkout = workoutMap.get(window.nextWorkoutId);
       const nextType: SessionType | undefined = nextWorkout?.type ?? window.nextWorkoutType;
       const hardDay = nextType ? isHardSession(nextType) : false;
-      const pctCap = profile.windowPctCap ?? 0.3;
-      let canTake = hardDay ? 0 : Math.min(profile.deficitCapPerWindow, window.need_kcal * pctCap);
+      let maxDeficit = Math.min(profile.deficitCapPerWindow, window.need_kcal * pctCap);
 
-      if (window.notes.includes(WINDOW_UNDER_RECOVERY_FLAG)) {
-        canTake = 0;
-      } else if (window.notes.includes(WINDOW_EMPTY_FLAG)) {
-        canTake *= 0.5;
+      return {
+        window,
+        maxDeficit: Math.max(0, maxDeficit),
+        allocated: 0,
+      };
+    });
+
+    const totalCapacity = entries.reduce((sum, entry) => sum + entry.maxDeficit, 0);
+    let remainingDeficit = Math.min(requestedDeficit, totalCapacity);
+
+    let active = entries.filter((entry) => entry.maxDeficit > EPSILON);
+
+    while (remainingDeficit > EPSILON && active.length > 0) {
+      const share = remainingDeficit / active.length;
+      let progressed = false;
+
+      for (const entry of active) {
+        const capacityLeft = entry.maxDeficit - entry.allocated;
+        if (capacityLeft <= EPSILON) {
+          continue;
+        }
+        const applied = Math.min(capacityLeft, share);
+        if (applied > EPSILON) {
+          entry.allocated += applied;
+          remainingDeficit -= applied;
+          progressed = true;
+        }
       }
 
-      const deficit = Math.min(canTake, remainingDeficit);
-      if (deficit > 0) {
-        window.target_kcal = Math.max(0, window.need_kcal - deficit);
-        window.notes.push(`Deficit applied: ${Math.round(deficit)}`);
+      if (!progressed) {
+        break;
       }
-      window.macros = computeMacroTargets(profile, window.target_kcal);
+
+      active = entries.filter((entry) => entry.maxDeficit - entry.allocated > EPSILON);
+    }
+
+    const allocated = entries.reduce((sum, entry) => sum + entry.allocated, 0);
+    const carryOver = Math.max(0, requestedDeficit - allocated);
+
+    const macroAccumulator = { protein_g: 0, fat_g: 0, carb_g: 0 };
+
+    for (const entry of entries) {
+      const { window, allocated: deficit } = entry;
+      const appliedDeficit = Math.max(0, Math.min(window.need_kcal, deficit));
+      const target = Math.max(0, window.need_kcal - appliedDeficit);
+      window.target_kcal = target;
+      if (appliedDeficit > EPSILON) {
+        window.notes.push(`${DEFICIT_APPLIED_NOTE_PREFIX}${Math.round(appliedDeficit)}`);
+      }
+      window.macros = computeMacroTargets(profile, window.target_kcal, window.workoutCarb_kcal);
       macroAccumulator.protein_g += window.macros.protein_g;
       macroAccumulator.fat_g += window.macros.fat_g;
       macroAccumulator.carb_g += window.macros.carb_g;
-      remainingDeficit -= deficit;
     }
 
-    const allocated = weeklyTarget - remainingDeficit;
+    if (carryOver > EPSILON && allocated > EPSILON) {
+      const carryRounded = Math.round(carryOver);
+      for (const entry of entries) {
+        const { window, allocated: applied } = entry;
+        if (applied > EPSILON && entry.maxDeficit - applied <= EPSILON) {
+          window.notes.push(`${DEFICIT_MAXED_NOTE_PREFIX}${Math.round(applied)}:${carryRounded}`);
+        }
+      }
+    }
+
     weeklyPlans.push({
       weekKey,
       weekStartISO,
       weekEndISO,
-      weeklyTargetDeficit_kcal: Math.round(weeklyTarget),
+      weeklyTargetDeficit_kcal: Math.round(requestedDeficit),
       weeklyAllocated_kcal: Math.round(allocated),
-      carryOver_kcal: remainingDeficit > 0 ? Math.round(remainingDeficit) : undefined,
+      carryOver_kcal: carryOver > EPSILON ? Math.round(carryOver) : undefined,
       macros: {
         protein_g: round(macroAccumulator.protein_g),
         fat_g: round(macroAccumulator.fat_g),

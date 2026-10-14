@@ -1,6 +1,11 @@
 import type { Profile } from '../types.js';
 
-export type PlannerPage = 'onboarding' | 'planner' | 'windows' | 'weekly' | 'athlete' | 'settings';
+export type PlannerPage =
+  | 'onboarding'
+  | 'timeline'
+  | 'weekly'
+  | 'athlete'
+  | 'settings';
 
 export type PlannerOverrides = Pick<
   Profile,

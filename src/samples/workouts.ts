@@ -14,6 +14,18 @@ export const plannedWorkouts: PlannedWorkout[] = [
     kj_source: 'ICU Structured',
   },
   {
+    id: 'wkt-endurance-002',
+    source: 'intervals',
+    title: 'Monday Recovery Spin',
+    type: 'Endurance',
+    startISO: '2024-06-16T13:00:00Z',
+    endISO: '2024-06-16T14:15:00Z',
+    duration_hr: 1.25,
+    planned_kJ: 600,
+    ftp_watts_at_plan: 250,
+    kj_source: 'ICU Structured',
+  },
+  {
     id: 'wkt-tempo-001',
     source: 'intervals',
     title: 'Sweet Spot Tempo Finish',

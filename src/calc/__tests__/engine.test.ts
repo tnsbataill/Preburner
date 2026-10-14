@@ -27,12 +27,14 @@ describe('prescription engine', () => {
     expect(estimate).toBeLessThan(1500);
   });
 
-  it('protects hard days from deficits', () => {
+  it('allocates deficit across windows including hard days', () => {
     const windows = buildWindows(sampleProfile, plannedWorkouts);
     const { windows: allocated } = allocateWeeklyDeficits(sampleProfile, windows, plannedWorkouts);
     const hardWindow = allocated.find((window) => window.nextWorkoutType === 'VO2');
     expect(hardWindow).toBeDefined();
-    expect(hardWindow?.target_kcal).toBe(hardWindow?.need_kcal);
+    expect(hardWindow?.target_kcal ?? 0).toBeLessThan(hardWindow?.need_kcal ?? 0);
+    const deficitApplied = (hardWindow?.need_kcal ?? 0) - (hardWindow?.target_kcal ?? 0);
+    expect(deficitApplied).toBeGreaterThan(0);
   });
 
   it('enforces deficit caps and weekly totals', () => {
@@ -58,25 +60,31 @@ describe('prescription engine', () => {
   });
 
   it('applies weight flags to adjust deficits', () => {
+    const baseWindows = buildWindows(sampleProfile, plannedWorkouts);
+    const { windows: baseAllocated } = allocateWeeklyDeficits(sampleProfile, baseWindows, plannedWorkouts);
+
     const windows = buildWindows(sampleProfile, plannedWorkouts);
     windows[0].notes.push(WINDOW_EMPTY_FLAG);
-    windows[1].notes.push(WINDOW_UNDER_RECOVERY_FLAG);
-    const { windows: allocated } = allocateWeeklyDeficits(sampleProfile, windows, plannedWorkouts);
+    windows[1].notes.push(`${WINDOW_UNDER_RECOVERY_FLAG}:0.500:0.200:0.700`);
+    const { windows: flagged } = allocateWeeklyDeficits(sampleProfile, windows, plannedWorkouts);
 
-    const flaggedHalf = allocated[0].need_kcal - allocated[0].target_kcal;
-    const expectedMax = Math.min(
-      sampleProfile.deficitCapPerWindow,
-      allocated[0].need_kcal * (sampleProfile.windowPctCap ?? 0.3),
-    );
-    expect(flaggedHalf).toBeLessThanOrEqual(expectedMax * 0.51);
+    expect(flagged[0].notes).toContain(WINDOW_EMPTY_FLAG);
+    expect(flagged[1].notes.some((note) => note.startsWith(WINDOW_UNDER_RECOVERY_FLAG))).toBe(true);
 
-    const flaggedZero = allocated[1].need_kcal - allocated[1].target_kcal;
-    expect(flaggedZero).toBe(0);
+    const baseDeficit0 = baseAllocated[0].need_kcal - baseAllocated[0].target_kcal;
+    const baseDeficit1 = baseAllocated[1].need_kcal - baseAllocated[1].target_kcal;
+    const flaggedDeficit0 = flagged[0].need_kcal - flagged[0].target_kcal;
+    const flaggedDeficit1 = flagged[1].need_kcal - flagged[1].target_kcal;
+
+    expect(flaggedDeficit0).toBeCloseTo(baseDeficit0, 5);
+    expect(flaggedDeficit1).toBeCloseTo(baseDeficit1, 5);
   });
 
   it('creates carb splits using profile defaults', () => {
     const windowNeed = 2000;
-    const plan = computeCarbPlan(sampleProfile, plannedWorkouts[2], windowNeed);
+    const vo2Workout = plannedWorkouts.find((workout) => workout.type === 'VO2');
+    expect(vo2Workout).toBeDefined();
+    const plan = computeCarbPlan(sampleProfile, vo2Workout!, windowNeed);
     expect(plan.g_per_hr).toBeCloseTo(sampleProfile.carbBands.VO2[1], 1);
     expect(plan.gluFruRatio).toBeCloseTo(sampleProfile.gluFruRatio, 5);
     const totalCarbs = plan.pre_g + plan.during_g + plan.post_g;

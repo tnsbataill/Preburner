@@ -11,6 +11,33 @@ function handleNumberChange(handler: (value: number) => void) {
   };
 }
 
+function TooltipLabel({
+  children,
+  message,
+  htmlFor,
+}: {
+  children: React.ReactNode;
+  message: string;
+  htmlFor?: string;
+}) {
+  return (
+    <span className="flex items-center gap-1">
+      <label htmlFor={htmlFor}>
+        {children}
+      </label>
+      <span
+        className="group relative inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-600 text-[0.55rem] font-semibold text-slate-300"
+        aria-hidden="true"
+      >
+        ?
+        <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 hidden min-w-[12rem] -translate-x-1/2 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[0.55rem] text-slate-200 shadow-lg transition-opacity duration-75 group-hover:block">
+          {message}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 export function OverridesControls() {
   const overrides = usePlannerStore((state) => state.overrides);
   const updateOverride = usePlannerStore((state) => state.updateOverride);
@@ -28,16 +55,21 @@ export function OverridesControls() {
   const gluFruId = useId();
   const carbBandIdPrefix = useId();
 
+  const carbSplitTotal =
+    overrides.carbSplit.pre + overrides.carbSplit.during + overrides.carbSplit.post;
+
   return (
     <div className="space-y-4">
       <section className="space-y-2">
-        <label
-          className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400"
-          htmlFor={efficiencyPresetId}
-        >
-          <span>Efficiency preset</span>
+        <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+          <TooltipLabel
+            htmlFor={efficiencyPresetId}
+            message="Sets the baseline gut efficiency used when estimating planned kJ from power targets. Start with the closest preset, then fine-tune below."
+          >
+            Efficiency preset
+          </TooltipLabel>
           <span className="font-medium text-slate-200">{overrides.efficiencyPreset}</span>
-        </label>
+        </div>
         <select
           className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-100"
           value={overrides.efficiencyPreset}
@@ -55,7 +87,12 @@ export function OverridesControls() {
       <section className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={efficiencyId}>Efficiency (%)</label>
+            <TooltipLabel
+              htmlFor={efficiencyId}
+              message="Controls how much dietary energy you need per kilojoule of work. Higher efficiency = fewer kcal required for the same plan."
+            >
+              Efficiency (%)
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{(overrides.efficiency * 100).toFixed(1)}</span>
           </div>
           <input
@@ -76,7 +113,12 @@ export function OverridesControls() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={activityFactorId}>Activity factor</label>
+            <TooltipLabel
+              htmlFor={activityFactorId}
+              message="Multiplier applied to resting needs across the week (covers non-training activity). Typical range 1.2–1.6."
+            >
+              Activity factor
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.activityFactorDefault.toFixed(2)}</span>
           </div>
           <input
@@ -97,7 +139,12 @@ export function OverridesControls() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={weightChangeId}>Weekly weight change (kg)</label>
+            <TooltipLabel
+              htmlFor={weightChangeId}
+              message="Target weight change each week. Positive = gain. The planner allocates or limits deficits to match this trajectory."
+            >
+              Weekly weight change (kg)
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.targetKgPerWeek.toFixed(2)}</span>
           </div>
           <input
@@ -118,7 +165,12 @@ export function OverridesControls() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={deficitCapId}>Deficit cap / window</label>
+            <TooltipLabel
+              htmlFor={deficitCapId}
+              message="Max energy deficit allowed in an easy window. Protects hard days by capping how much you underfuel."
+            >
+              Deficit cap / window
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{Math.round(overrides.deficitCapPerWindow)}</span>
           </div>
           <input
@@ -142,7 +194,12 @@ export function OverridesControls() {
         <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Macro defaults</h3>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={proteinId}>Protein (g/kg)</label>
+            <TooltipLabel
+              htmlFor={proteinId}
+              message="Grams of protein per kilogram body weight per day. 1.6–2.2 g/kg suits most endurance athletes."
+            >
+              Protein (g/kg)
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.protein_g_per_kg.toFixed(2)}</span>
           </div>
           <input
@@ -162,7 +219,12 @@ export function OverridesControls() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={fatId}>Fat min (g/kg)</label>
+            <TooltipLabel
+              htmlFor={fatId}
+              message="Minimum dietary fat in grams per kilogram body weight. Ensures hormonal support before carbs fill the rest."
+            >
+              Fat min (g/kg)
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.fat_g_per_kg_min.toFixed(2)}</span>
           </div>
           <input
@@ -250,9 +312,29 @@ export function OverridesControls() {
 
       <section className="space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Carb splits (%)</h3>
+        <div className="flex items-center justify-between text-[0.65rem] text-slate-400">
+          <span>Total</span>
+          <span
+            className={`font-semibold ${
+              carbSplitTotal === 100 ? 'text-emerald-300' : 'text-amber-300'
+            }`}
+          >
+            {carbSplitTotal}%
+          </span>
+        </div>
+        {carbSplitTotal !== 100 ? (
+          <p className="rounded border border-amber-900/40 bg-amber-950/30 p-2 text-[0.6rem] text-amber-200">
+            Pre + during + post carbs should total 100%. Adjust the sliders so the planner can allocate correctly.
+          </p>
+        ) : null}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={`${carbSplitIdPrefix}-pre`}>Pre</label>
+            <TooltipLabel
+              htmlFor={`${carbSplitIdPrefix}-pre`}
+              message="Percent of workout carbs delivered before the session. Useful for glycogen priming."
+            >
+              Pre
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.carbSplit.pre}</span>
           </div>
           <input
@@ -272,7 +354,12 @@ export function OverridesControls() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={`${carbSplitIdPrefix}-during`}>During</label>
+            <TooltipLabel
+              htmlFor={`${carbSplitIdPrefix}-during`}
+              message="Percent of carbs taken while riding/running. Guides bottle + gel planning."
+            >
+              During
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.carbSplit.during}</span>
           </div>
           <input
@@ -292,7 +379,12 @@ export function OverridesControls() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-            <label htmlFor={`${carbSplitIdPrefix}-post`}>Post</label>
+            <TooltipLabel
+              htmlFor={`${carbSplitIdPrefix}-post`}
+              message="Percent reserved for the glycogen replacement window after the workout."
+            >
+              Post
+            </TooltipLabel>
             <span className="font-medium text-slate-200">{overrides.carbSplit.post}</span>
           </div>
           <input
@@ -314,7 +406,12 @@ export function OverridesControls() {
 
       <section className="space-y-2">
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-          <label htmlFor={gluFruId}>Glu:Fru ratio</label>
+          <TooltipLabel
+            htmlFor={gluFruId}
+            message="Target glucose:fructose ratio for during-fuel blends. 1.0–1.2 supports 90–120g/hr intakes."
+          >
+            Glu:Fru ratio
+          </TooltipLabel>
           <span className="font-medium text-slate-200">{overrides.gluFruRatio.toFixed(2)}</span>
         </div>
         <input

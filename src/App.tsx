@@ -4,18 +4,16 @@ import { QuickAdjustmentsPanel } from './components/QuickAdjustmentsPanel.js';
 import { InstallPrompt } from './components/InstallPrompt.js';
 import { OfflinePlanSync } from './components/OfflinePlanSync.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
-import { PlannerPage } from './pages/PlannerPage.js';
+import { TimelinePage } from './pages/TimelinePage.js';
 import { WeeklyPage } from './pages/WeeklyPage.js';
-import { WindowsPage } from './pages/WindowsPage.js';
 import { AthleteProfilePage } from './pages/AthleteProfilePage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { usePlannerStore } from './state/plannerStore.js';
 import type { PlannerPage as PlannerPageKey } from './state/types.js';
 
 const pageDefinitions: { key: PlannerPageKey; label: string }[] = [
-  { key: 'onboarding', label: 'Onboarding' },
-  { key: 'planner', label: 'Planner' },
-  { key: 'windows', label: 'Windows' },
+  { key: 'onboarding', label: 'Home' },
+  { key: 'timeline', label: 'Timeline' },
   { key: 'weekly', label: 'Weekly' },
   { key: 'athlete', label: 'Athlete' },
   { key: 'settings', label: 'Settings' },
@@ -31,10 +29,8 @@ function usePlannerInitialization() {
 
 function PageContent({ page }: { page: PlannerPageKey }) {
   switch (page) {
-    case 'planner':
-      return <PlannerPage />;
-    case 'windows':
-      return <WindowsPage />;
+    case 'timeline':
+      return <TimelinePage />;
     case 'weekly':
       return <WeeklyPage />;
     case 'athlete':
@@ -108,11 +104,11 @@ export default function App() {
         </header>
 
         <div className="flex flex-col gap-6 lg:flex-row">
-          <aside className="flex flex-col gap-4 lg:w-80">
+          <aside className="flex flex-col gap-4 flex-shrink-0 lg:w-80 lg:min-w-[20rem]">
             <WeightTracker />
             {page !== 'settings' ? <QuickAdjustmentsPanel /> : null}
           </aside>
-          <main className="flex-1 space-y-6">{content}</main>
+          <main className="flex-1 space-y-6 min-w-0">{content}</main>
         </div>
       </div>
       <OfflinePlanSync />

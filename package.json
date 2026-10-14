@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "debug:deficit": "node --loader ts-node/esm scripts/debug-deficit.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "demo": "tsc --project tsconfig.demo.json && node --experimental-specifier-resolution=node dist-demo/scripts/demo.js"
@@ -24,6 +25,7 @@
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.4",
+    "ts-node": "^10.9.2",
     "tslib": "^2.6.2",
     "typescript": "^5.9.2",
     "vite": "^5.4.20",

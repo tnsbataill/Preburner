@@ -1,0 +1,1126 @@
+{
+  "capturedAt": "2025-10-05T22:28:28.693Z",
+  "version": "1.0",
+  "profile": {
+    "sex": "M",
+    "age_years": 34,
+    "height_cm": 180.33999999999997,
+    "weight_kg": 86.1825,
+    "ftp_watts": 309,
+    "efficiencyPreset": "Competitive",
+    "efficiency": 0.23,
+    "activityFactorDefault": 1.32,
+    "activityFactorOverrides": {
+      "2024-06-14": 1.38
+    },
+    "targetKgPerWeek": -0.35,
+    "kcalPerKg": 7700,
+    "deficitCapPerWindow": 600,
+    "windowPctCap": 0.3,
+    "protein_g_per_kg": 1.7,
+    "fat_g_per_kg_min": 0.6,
+    "carbBands": {
+      "Endurance": [
+        55,
+        70
+      ],
+      "Tempo": [
+        65,
+        85
+      ],
+      "Threshold": [
+        80,
+        100
+      ],
+      "VO2": [
+        90,
+        110
+      ],
+      "Race": [
+        90,
+        120
+      ],
+      "Rest": [
+        0,
+        0
+      ]
+    },
+    "carbSplit": {
+      "pre": 0.2,
+      "during": 0.6,
+      "post": 0.2
+    },
+    "gluFruRatio": 0.8,
+    "useImperial": true
+  },
+  "overrides": {
+    "efficiencyPreset": "Competitive",
+    "efficiency": 0.23,
+    "activityFactorDefault": 1.32,
+    "targetKgPerWeek": -0.35,
+    "deficitCapPerWindow": 600,
+    "protein_g_per_kg": 1.7,
+    "fat_g_per_kg_min": 0.6,
+    "carbBands": {
+      "Endurance": [
+        55,
+        70
+      ],
+      "Tempo": [
+        65,
+        85
+      ],
+      "Threshold": [
+        80,
+        100
+      ],
+      "VO2": [
+        90,
+        110
+      ],
+      "Race": [
+        90,
+        120
+      ],
+      "Rest": [
+        0,
+        0
+      ]
+    },
+    "carbSplit": {
+      "pre": 0.2,
+      "during": 0.6,
+      "post": 0.2
+    },
+    "gluFruRatio": 0.8
+  },
+  "workouts": [
+    {
+      "id": "74541746",
+      "source": "intervals",
+      "title": "Stickney",
+      "type": "Endurance",
+      "startISO": "2025-10-05T04:00:00.000Z",
+      "endISO": "2025-10-06T04:00:00.000Z",
+      "duration_hr": 1.5,
+      "planned_kJ": 882.940157208,
+      "ftp_watts_at_plan": 309,
+      "steps": [
+        {
+          "start_s": 0,
+          "duration_s": 900,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 900,
+          "duration_s": 600,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1500,
+          "duration_s": 600,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2100,
+          "duration_s": 900,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3000,
+          "duration_s": 600,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3600,
+          "duration_s": 600,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 4200,
+          "duration_s": 1200,
+          "target_type": "%FTP"
+        }
+      ],
+      "kj_source": "Estimated (IF/TSS)"
+    },
+    {
+      "id": "74541748",
+      "source": "intervals",
+      "title": "Gendarme +3",
+      "type": "VO2",
+      "startISO": "2025-10-07T04:00:00.000Z",
+      "endISO": "2025-10-08T04:00:00.000Z",
+      "duration_hr": 1,
+      "planned_kJ": 956.922677496,
+      "ftp_watts_at_plan": 309,
+      "steps": [
+        {
+          "start_s": 0,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 120,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 240,
+          "duration_s": 12,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 252,
+          "duration_s": 48,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 300,
+          "duration_s": 18,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 318,
+          "duration_s": 42,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 360,
+          "duration_s": 24,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 384,
+          "duration_s": 216,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 600,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 630,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 650,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 680,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 700,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 730,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 750,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 780,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 800,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 830,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 850,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 880,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 900,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 930,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 950,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 980,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1000,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1030,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1050,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1080,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1100,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1130,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1150,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1180,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1200,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1230,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1250,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1280,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1300,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1330,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1350,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1380,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1400,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1430,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1450,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1480,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1500,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1530,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1550,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1580,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1600,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1630,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1650,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1680,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1700,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1730,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1750,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1780,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1800,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1830,
+          "duration_s": 330,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2160,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2190,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2210,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2240,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2260,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2290,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2310,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2340,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2360,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2390,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2410,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2440,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2460,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2490,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2510,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2540,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2560,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2590,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2610,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2640,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2660,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2690,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2710,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2740,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2760,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2790,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2810,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2840,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2860,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2890,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2910,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2940,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2960,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2990,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3010,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3040,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3060,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3090,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3110,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3140,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3160,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3190,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3210,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3240,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3260,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3290,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3310,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3340,
+          "duration_s": 20,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3360,
+          "duration_s": 30,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3390,
+          "duration_s": 210,
+          "target_type": "%FTP"
+        }
+      ],
+      "kj_source": "Estimated (IF/TSS)"
+    },
+    {
+      "id": "74541741",
+      "source": "intervals",
+      "title": "King",
+      "type": "Tempo",
+      "startISO": "2025-10-08T04:00:00.000Z",
+      "endISO": "2025-10-09T04:00:00.000Z",
+      "duration_hr": 0.5,
+      "planned_kJ": 401.08149323999993,
+      "ftp_watts_at_plan": 309,
+      "steps": [
+        {
+          "start_s": 0,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 120,
+          "duration_s": 180,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 300,
+          "duration_s": 360,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 660,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 720,
+          "duration_s": 360,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1080,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1140,
+          "duration_s": 360,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1500,
+          "duration_s": 300,
+          "target_type": "%FTP"
+        }
+      ],
+      "kj_source": "Estimated (IF/TSS)"
+    },
+    {
+      "id": "74541747",
+      "source": "intervals",
+      "title": "Monitor +1",
+      "type": "Threshold",
+      "startISO": "2025-10-09T04:00:00.000Z",
+      "endISO": "2025-10-10T04:00:00.000Z",
+      "duration_hr": 1,
+      "planned_kJ": 930.700584,
+      "ftp_watts_at_plan": 309,
+      "steps": [
+        {
+          "start_s": 0,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 120,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 240,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 360,
+          "duration_s": 180,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 540,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 600,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 660,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 720,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 780,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 840,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 900,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 960,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1080,
+          "duration_s": 240,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1320,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1380,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1500,
+          "duration_s": 240,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1740,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1800,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1860,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1920,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 1980,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2040,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2100,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2160,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2220,
+          "duration_s": 180,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2400,
+          "duration_s": 180,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2580,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2640,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2700,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2760,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2820,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2880,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 2940,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3000,
+          "duration_s": 60,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3060,
+          "duration_s": 240,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3300,
+          "duration_s": 120,
+          "target_type": "%FTP"
+        },
+        {
+          "start_s": 3420,
+          "duration_s": 180,
+          "target_type": "%FTP"
+        }
+      ],
+      "kj_source": "Estimated (IF/TSS)"
+    }
+  ],
+  "windows": [
+    {
+      "windowStartISO": "2025-10-04T04:00:00.000Z",
+      "windowEndISO": "2025-10-06T04:00:00.000Z",
+      "prevWorkoutId": "START",
+      "nextWorkoutId": "74541746",
+      "nextWorkoutType": "Endurance",
+      "need_kcal": 5974.12,
+      "target_kcal": 5374.12,
+      "activityFactorApplied": 1.32,
+      "resting_kcal": 5056.61,
+      "workout_kcal": 917.51,
+      "workoutCarb_kcal": 550,
+      "carbs": {
+        "g_per_hr": 55,
+        "pre_g": 27.5,
+        "during_g": 82.5,
+        "post_g": 27.5,
+        "gluFruRatio": 0.8
+      },
+      "macros": {
+        "protein_g": 146.5,
+        "fat_g": 51.7,
+        "carb_g": 943.2
+      },
+      "notes": [
+        "EMPTY_FLAG",
+        "UNDER_RECOVERY_FLAG:3.229:0.400:3.629",
+        "DEFICIT_APPLIED:600",
+        "DEFICIT_MAXED:600:295"
+      ]
+    },
+    {
+      "windowStartISO": "2025-10-06T04:00:00.000Z",
+      "windowEndISO": "2025-10-08T04:00:00.000Z",
+      "prevWorkoutId": "74541746",
+      "nextWorkoutId": "74541748",
+      "nextWorkoutType": "VO2",
+      "need_kcal": 6051,
+      "target_kcal": 5451,
+      "activityFactorApplied": 1.32,
+      "resting_kcal": 5056.61,
+      "workout_kcal": 994.39,
+      "workoutCarb_kcal": 733.33,
+      "carbs": {
+        "g_per_hr": 110,
+        "pre_g": 36.7,
+        "during_g": 110,
+        "post_g": 36.7,
+        "gluFruRatio": 0.8
+      },
+      "macros": {
+        "protein_g": 146.5,
+        "fat_g": 51.7,
+        "carb_g": 916.6
+      },
+      "notes": [
+        "DEFICIT_APPLIED:600",
+        "DEFICIT_MAXED:600:295"
+      ]
+    },
+    {
+      "windowStartISO": "2025-10-08T04:00:00.000Z",
+      "windowEndISO": "2025-10-09T04:00:00.000Z",
+      "prevWorkoutId": "74541748",
+      "nextWorkoutId": "74541741",
+      "nextWorkoutType": "Tempo",
+      "need_kcal": 2945.09,
+      "target_kcal": 2345.09,
+      "activityFactorApplied": 1.32,
+      "resting_kcal": 2528.31,
+      "workout_kcal": 416.79,
+      "workoutCarb_kcal": 250,
+      "carbs": {
+        "g_per_hr": 75,
+        "pre_g": 12.5,
+        "during_g": 37.5,
+        "post_g": 12.5,
+        "gluFruRatio": 0.8
+      },
+      "macros": {
+        "protein_g": 146.5,
+        "fat_g": 51.7,
+        "carb_g": 260.9
+      },
+      "notes": [
+        "DEFICIT_APPLIED:600",
+        "DEFICIT_MAXED:600:295"
+      ]
+    },
+    {
+      "windowStartISO": "2025-10-09T04:00:00.000Z",
+      "windowEndISO": "2025-10-10T04:00:00.000Z",
+      "prevWorkoutId": "74541741",
+      "nextWorkoutId": "74541747",
+      "nextWorkoutType": "Threshold",
+      "need_kcal": 3495.45,
+      "target_kcal": 2895.45,
+      "activityFactorApplied": 1.32,
+      "resting_kcal": 2528.31,
+      "workout_kcal": 967.14,
+      "workoutCarb_kcal": 666.67,
+      "carbs": {
+        "g_per_hr": 100,
+        "pre_g": 33.3,
+        "during_g": 100,
+        "post_g": 33.3,
+        "gluFruRatio": 0.8
+      },
+      "macros": {
+        "protein_g": 146.5,
+        "fat_g": 51.7,
+        "carb_g": 294.3
+      },
+      "notes": [
+        "DEFICIT_APPLIED:600",
+        "DEFICIT_MAXED:600:295"
+      ]
+    }
+  ],
+  "weekly": [
+    {
+      "weekKey": "2025-W41",
+      "weekStartISO": "2025-10-09T00:00:00.000Z",
+      "weekEndISO": "2025-10-15T23:59:59.999Z",
+      "weeklyTargetDeficit_kcal": 2695,
+      "weeklyAllocated_kcal": 2400,
+      "carryOver_kcal": 295,
+      "macros": {
+        "protein_g": 586,
+        "fat_g": 206.8,
+        "carb_g": 2415
+      }
+    }
+  ],
+  "weights": [
+    {
+      "dateISO": "2025-09-16",
+      "weight_kg": 86.1825,
+      "source": "intervals"
+    },
+    {
+      "dateISO": "2025-09-25",
+      "weight_kg": 89.81139,
+      "source": "intervals"
+    },
+    {
+      "dateISO": "2025-09-27",
+      "weight_kg": 89.81139,
+      "source": "intervals"
+    },
+    {
+      "dateISO": "2025-10-02",
+      "weight_kg": 88.813385,
+      "source": "intervals"
+    },
+    {
+      "dateISO": "2025-10-05",
+      "weight_kg": 86.1825,
+      "source": "intervals"
+    }
+  ],
+  "weightSummary": {
+    "startISO": "2025-09-27",
+    "endISO": "2025-10-05",
+    "days": 8,
+    "actualDeltaKg": -3.6288899999999984,
+    "expectedDeltaKg": -0.39999999999999997
+  },
+  "dataSource": "intervals",
+  "lastSyncISO": "2025-10-05T22:28:24.492Z"
+}

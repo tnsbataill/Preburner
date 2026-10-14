@@ -75,6 +75,9 @@ export interface WindowPlan {
   need_kcal: number;
   target_kcal: number;
   activityFactorApplied: number;
+  resting_kcal: number;
+  workout_kcal: number;
+  workoutCarb_kcal: number;
   carbs: CarbPlan;
   macros: MacroTargets;
   notes: string[];

@@ -50,27 +50,34 @@ export function isHardSession(type: SessionType): boolean {
   return HARD_SESSION_TYPES.includes(type);
 }
 
-export function computeMacroTargets(profile: Profile, targetKcal: number): MacroTargets {
+export function computeMacroTargets(
+  profile: Profile,
+  targetKcal: number,
+  workoutCarbKcal = 0,
+): MacroTargets {
   const proteinDefault = profile.protein_g_per_kg * profile.weight_kg;
   let protein_g = proteinDefault;
-  let remainingKcal = Math.max(0, targetKcal - protein_g * 4);
+  const proteinKcal = protein_g * 4;
 
-  if (remainingKcal === 0 && protein_g * 4 > targetKcal) {
-    protein_g = targetKcal / 4;
-    remainingKcal = 0;
-  }
+  let availableKcal = Math.max(0, targetKcal - workoutCarbKcal);
 
-  const fatDefault = profile.fat_g_per_kg_min * profile.weight_kg;
-  let fat_g = fatDefault;
-  const fatKcal = fat_g * 9;
-  if (fatKcal > remainingKcal) {
-    fat_g = remainingKcal / 9;
-    remainingKcal = 0;
+  if (availableKcal < proteinKcal) {
+    protein_g = availableKcal > 0 ? availableKcal / 4 : 0;
+    availableKcal -= protein_g * 4;
   } else {
-    remainingKcal -= fatKcal;
+    availableKcal -= proteinKcal;
   }
 
-  const carb_g = remainingKcal > 0 ? remainingKcal / 4 : 0;
+  const fatMinimum = profile.fat_g_per_kg_min * profile.weight_kg;
+  let fat_g = fatMinimum;
+  let fatKcal = fat_g * 9;
+  if (fatKcal > availableKcal) {
+    fat_g = availableKcal > 0 ? availableKcal / 9 : 0;
+    fatKcal = fat_g * 9;
+  }
+  availableKcal = Math.max(0, availableKcal - fatKcal);
+
+  const carb_g = availableKcal > 0 ? availableKcal / 4 : 0;
 
   return {
     protein_g: round(Math.max(0, protein_g), 1),
@@ -151,15 +158,19 @@ export function buildWindows(profile: Profile, workouts: PlannedWorkout[]): Wind
     const restingKcal = rmr * (windowHours / 24) * activityFactor;
     const exerciseKcal = (estimateWorkoutKilojoules(next) / profile.efficiency) * KCAL_PER_KJ;
     const needKcal = restingKcal + exerciseKcal;
+    const restingRounded = round(restingKcal);
+    const workoutRounded = round(exerciseKcal);
+    const needRounded = round(needKcal);
     const carbPlan = computeCarbPlan(profile, next, needKcal);
+    const workoutCarbKcal = (carbPlan.pre_g + carbPlan.during_g + carbPlan.post_g) * 4;
     const notes: string[] = [];
 
     if (carbPlan.overFuelGuardApplied) {
       notes.push('Over-fuel guard applied');
     }
 
-    const targetKcal = round(needKcal);
-    const macroTargets = computeMacroTargets(profile, targetKcal);
+    const targetKcal = needRounded;
+    const macroTargets = computeMacroTargets(profile, targetKcal, workoutCarbKcal);
 
     windows.push({
       windowStartISO: windowStart,
@@ -167,9 +178,12 @@ export function buildWindows(profile: Profile, workouts: PlannedWorkout[]): Wind
       prevWorkoutId: prev ? prev.id : 'START',
       nextWorkoutId: next.id,
       nextWorkoutType: next.type,
-      need_kcal: targetKcal,
+      need_kcal: needRounded,
       target_kcal: targetKcal,
       activityFactorApplied: round(activityFactor, 2),
+      resting_kcal: restingRounded,
+      workout_kcal: workoutRounded,
+      workoutCarb_kcal: round(workoutCarbKcal),
       carbs: mapCarbPlan(carbPlan),
       macros: macroTargets,
       notes,
