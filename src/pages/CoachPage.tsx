@@ -3,6 +3,7 @@ import { ArrowUp, Bot, Check, KeyRound, Loader2, NotebookPen, Plus, RotateCcw, S
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { navigate } from '../App';
 import { applyChange } from '../coach/apply';
+import { clearCoachHistory, loadCoachHistory, saveCoachHistory } from '../coach/history';
 import { applyChanges, runTool } from '../coach/tools';
 import type { Proposal, ProposalChange } from '../coach/types';
 import { formatDate, formatDuration } from '../engine/time';
@@ -182,7 +183,7 @@ export function CoachPage() {
         apiKey: s.connection.anthropicKey,
         model: s.connection.coachModel,
         world: { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today },
-        history: s.coach.apiHistory as Anthropic.Beta.BetaMessageParam[],
+        history: loadCoachHistory() as Anthropic.Beta.BetaMessageParam[],
         userText: text,
         signal: abort.current.signal,
         onStep: (label) => {
@@ -190,10 +191,11 @@ export function CoachPage() {
           setSteps([...collected]);
         },
       });
+      const kept = saveCoachHistory(res.history);
+      const note = kept ? '' : '\n\n(This conversation got long, so the next message starts a fresh one.)';
       s.update((st) => ({
         coach: {
-          apiHistory: res.history,
-          messages: [...st.coach.messages, { id: `m-${Date.now()}`, role: 'assistant', text: res.text, at: new Date().toISOString(), steps: [...new Set(collected)] }],
+          messages: [...st.coach.messages, { id: `m-${Date.now()}`, role: 'assistant', text: res.text + note, at: new Date().toISOString(), steps: [...new Set(collected)] }],
           proposals: res.proposal ? [...st.coach.proposals.map((p) => ({ ...p, status: 'closed' as const })), res.proposal] : st.coach.proposals,
         },
       }));
@@ -239,7 +241,7 @@ export function CoachPage() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Coach</h1>
         </div>
         {messages.length > 0 && (
-          <Button variant="ghost" className="text-xs" onClick={() => s.update((st) => ({ coach: { messages: [], apiHistory: [], proposals: st.coach.proposals.map((p) => ({ ...p, status: 'closed' as const })) } }))}>
+          <Button variant="ghost" className="text-xs" onClick={() => { clearCoachHistory(); s.update((st) => ({ coach: { messages: [], proposals: st.coach.proposals.map((p) => ({ ...p, status: 'closed' as const })) } })); }}>
             New conversation
           </Button>
         )}

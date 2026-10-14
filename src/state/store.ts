@@ -6,6 +6,7 @@ import { todayKey } from '../engine/time';
 import type { DateKey, Settings, WeightEntry, WellnessDay, Workout } from '../engine/types';
 import { IntervalsClient } from '../intervals/client';
 import { syncIntervals } from '../intervals/sync';
+import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
 
 export type Mode = 'demo' | 'intervals';
@@ -38,7 +39,7 @@ export interface AppState {
   /** sessions added locally (manual or accepted coach proposals in demo mode) */
   localWorkouts: Workout[];
   hiddenWorkoutIds: string[];
-  coach: { messages: CoachMessage[]; proposals: Proposal[]; apiHistory: unknown[] };
+  coach: { messages: CoachMessage[]; proposals: Proposal[] };
   syncing: boolean;
 
   update: (fn: (s: AppState) => Partial<AppState>) => void;
@@ -70,7 +71,7 @@ const initial = {
   eaten: {},
   localWorkouts: [],
   hiddenWorkoutIds: [],
-  coach: { messages: [], proposals: [], apiHistory: [] },
+  coach: { messages: [], proposals: [] },
   syncing: false,
 };
 
@@ -130,12 +131,38 @@ export const useApp = create<AppState>()(
         }
       },
 
-      resetAll: () => set({ ...initial, ...demoState(DEFAULT_SETTINGS) }),
+      resetAll: () => {
+        clearCoachHistory();
+        set({ ...initial, ...demoState(DEFAULT_SETTINGS) });
+      },
     }),
     {
       name: 'preburner-v2',
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      // A failed write (quota, private mode) must never crash the app.
+      storage: createJSONStorage(() => ({
+        getItem: (k) => {
+          try {
+            return localStorage.getItem(k);
+          } catch {
+            return null;
+          }
+        },
+        setItem: (k, v) => {
+          try {
+            localStorage.setItem(k, v);
+          } catch (err) {
+            console.warn('Preburner: could not save state', err);
+          }
+        },
+        removeItem: (k) => {
+          try {
+            localStorage.removeItem(k);
+          } catch {
+            /* ignore */
+          }
+        },
+      })),
       partialize: (s) => {
         const { syncing: _s, update: _u, ...rest } = s;
         void _s;

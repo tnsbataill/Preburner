@@ -18,6 +18,8 @@ How to work:
 
 export interface CoachRunOptions {
   apiKey: string;
+  /** injectable for tests */
+  fetch?: typeof fetch;
   model: string;
   world: CoachWorld;
   history: Anthropic.Beta.BetaMessageParam[];
@@ -44,7 +46,7 @@ let idSeq = 0;
 const nextId = (p: string) => `${p}-${Date.now().toString(36)}-${(idSeq += 1)}`;
 
 export async function runCoach(opts: CoachRunOptions): Promise<CoachRunResult> {
-  const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
+  const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true, maxRetries: 2, fetch: opts.fetch });
   const messages: Anthropic.Beta.BetaMessageParam[] = [...opts.history, { role: 'user', content: opts.userText }];
   let proposal: Proposal | undefined;
 
@@ -74,6 +76,14 @@ export async function runCoach(opts: CoachRunOptions): Promise<CoachRunResult> {
 
     const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
     if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
+      // A truncated turn can end on a tool_use; answer it so the saved history
+      // stays valid for the next request (never edit earlier turns instead).
+      if (toolUses.length > 0) {
+        messages.push({
+          role: 'user',
+          content: toolUses.map((tu) => ({ type: 'tool_result' as const, tool_use_id: tu.id, is_error: true, content: 'Not run: the response was cut off.' })),
+        });
+      }
       const text = response.content
         .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
         .map((b) => b.text)
