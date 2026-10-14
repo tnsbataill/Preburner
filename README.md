@@ -1,63 +1,63 @@
 # Preburner
 
-Preburner is a progressive web app that pulls upcoming workouts from Intervals.icu and turns them into day-by-day fueling guidance. It combines resting energy, planned work, macro floors, and deficit caps so you always know how much to eat before/during/after each session.
+Meal timing and fuelling built around your training plan. Preburner reads your calendar from Intervals.icu (including TrainerRoad-synced workouts) and lays out, for every day, **what to eat and when**: before, during and after each session, plus how much of any weight-loss deficit fits around the key work. An optional AI coach (Claude) reads the same data, simulates options against your goals, and proposes calendar changes for you to approve.
 
-The original vision, long-term UX ideas, and nutrition math are captured in [brief.md](./brief.md), but the summary below reflects the current implementation.
+It's a PWA hosted on GitHub Pages. Everything stays in your browser; keys are only sent to Intervals.icu and Anthropic.
 
-## What the app does today
+## What it does
 
-- **Live Intervals.icu sync** – Use a personal API key to fetch workouts, structured steps, and weight history for the current athlete (`/athlete/0`). Planned kilojoules are estimated when the API doesnt provide them.
-- **Planner windows** – Build fueling windows between workouts, merge resting needs with exercise cost, and cap deficits to easier days.
-- **Macro guidance** – Recommend protein, fat minimums, and carb split (pre/during/post) tailored to the session type and intensity.
-- **Weight + trend tracking** – Merge Intervals.icu wellness weights with manual entries, surface a rolling average, and compare against the weekly target.
-- **Offline-ready UI** – React + Vite + Tailwind frontend with IndexedDB persistence. Cached workouts include the synced athlete profile so sex/height/FTP are restored instantly on reload.
-- **Debug-first tooling** – The settings panel shows the detailed sync log (with a copy button) so you can share runs when something goes wrong.
+- **Today** – a timeline from wake to bed: meals, pre-ride snacks, in-ride carbs/fluid/sodium per hour, recovery meals and pre-sleep protein, each with macros, the reasoning behind it and food ideas. Includes a "next up" card, tick-off for meals you've eaten, and an estimated glycogen "fuel tank" across the day.
+- **Week** – a 7-day grid showing load, kcal target versus burn, carbs g/kg and where the deficit lands, plus your weight trend against the goal path.
+- **Fitness** – CTL/ATL/TSB history and a projection through your planned load to your goal event, with weekly load and ramp warnings.
+- **Coach** – a chat that grounds every answer in the engine's numbers and ends with a proposal of specific changes. You accept or reject each change, then apply it.
+- **Settings** – profile (synced from Intervals), daily rhythm, usual training times per weekday, goals, fuelling preferences, theme, backup and import.
 
-## Requirements
+## The model, briefly
 
-1. **Intervals.icu personal API key** – Generate one in *Intervals.icu → Settings → API*. Keep it private.
-2. **Planned workout access** – In the same settings screen enable “Allow access to planned workouts (API)”. Without it youll see a 403 during sync.
-3. **Browser clipboard permission** – Optional, but needed if you want the Sync Log Copy button to work.
+| Piece | Approach |
+| --- | --- |
+| Resting energy | Mifflin-St Jeor, or Katch-McArdle when body fat is set; × daily-life (NEAT) factor |
+| Session energy | kJ ÷ gross efficiency, minus the resting energy already counted. kJ sources, in priority order: planned → description ("kJ(Cal) 811") → workout steps → IF → load |
+| Daily carbs | Baseline + carbs actually burned (intensity-based CHO fraction) + a top-up when tomorrow is hard; held to the IOC/ACSM g/kg band on big days. Day before a ≥2.5 h race: ~9 g/kg carb-load |
+| In-ride fuel | g/h from duration × intensity, capped at your trained-gut max; glucose:fructose split above 60 g/h; fluid and sodium from sweat rate |
+| Meal timing | Main meals move out of the 2 h before a session; pre-ride meal 2–5 h out; early starts get a light breakfast or quick snack; races get a ~3 h-out breakfast; recovery within 20–45 min; two-a-days handled; long gaps bridged |
+| Weight goal | Target weight and date → weekly rate, capped at 1 % body mass/week. The deficit goes on easy days only, never cuts training carbs, and stops at the energy-availability floor (25 kcal/kg FFM for men, 30 for women) |
+| Fitness | Banister CTL/ATL (42/7 days), seeded from Intervals wellness |
 
-## Getting started locally
+Time handling is local wall clock throughout. TrainerRoad events arrive date-only (00:00), so Preburner treats them as "time unknown", uses your usual slot for that weekday, and lets you set the real time with one tap.
+
+## Intervals.icu
+
+1. Intervals.icu → Settings → Developer: copy your API key.
+2. Preburner → Settings → Connections: paste it and press **Connect**.
+
+It reads the athlete profile, events (−3 to +8 weeks), activities and wellness. Writes happen only when you ask for them:
+- **Coach proposals.** New sessions are created as Preburner-tagged events (`external_id`, so re-applying is idempotent). TrainerRoad-owned events are never edited or deleted, because TrainerRoad would re-sync them. Instead Preburner hides the event locally and adds a calendar note so you can mirror the change in TrainerRoad.
+- **"Send g/h to Intervals".** Sets `carbs_per_hour` on a single event, after you confirm.
+
+## Coach
+
+Add an Anthropic API key in Settings. The coach runs Claude (Opus 5.5 by default, Sonnet 5.5 optional) directly from the browser. It uses tool calls over the same engine: athlete context, calendar, fuelling plan, a sandbox simulator, and a final `propose_plan`. Nothing is applied until you approve it.
+
+## Development
 
 ```bash
 npm install
-npm run dev
+npm run dev            # http://localhost:5173
+npm test               # engine golden + invariant tests, Intervals integration tests, coach tool tests
+npm run test:e2e       # Playwright end-to-end on the demo provider (desktop + mobile)
+INTERVALS_API_KEY=… npm run test:live   # opt-in read-only test against your real account
+npm run build
 ```
 
-Open the printed localhost URL, paste your Intervals.icu API key in Settings, and hit **Refresh from Intervals.icu**.
+Layout:
 
-### Useful scripts
+- `src/engine/`: pure model (energy, fuelling, scheduler, goals, glycogen, fitness, plan). Golden day plans live in `src/engine/__tests__/golden/` as readable text.
+- `src/intervals/`: REST client, event/activity/wellness mapping, sync.
+- `src/coach/`: agent loop, tools, applying proposals.
+- `src/state/`: Zustand store (persisted to localStorage) and a one-time import from the v1 IndexedDB.
+- `src/pages`, `src/components`, `src/ui`: React UI (Tailwind; dark and light themes).
 
-| Script | Purpose |
-| --- | --- |
-| `npm run dev` | Vite dev server |
-| `npm run build` | Type-check + production bundle |
-| `npm test` | Vitest unit tests (provider + calc coverage) |
+> If the repo lives in an iCloud-synced folder, keep `node_modules` out of iCloud (`node_modules.nosync` plus a symlink). Otherwise evicted files make every tool run hang.
 
-## Data + caching notes
-
-- **IndexedDB (Dexie)** stores overrides, connection settings, cached workouts, cached weights, and the most recent Intervals profile snapshot.
-- On app load we instantly render from cache, then kick off a background refresh so the view flips to the latest Intervals data when it arrives.
-- Cached workouts are keyed by the selected date window. If you change the range, a new cache entry is created.
-
-## Repo structure highlights
-
-- `src/adapters/intervals.ts` – Intervals.icu integration: authentication, workout parsing, kilojoule estimation, profile extraction.
-- `src/state/plannerStore.ts` – Zustand store orchestrating sync, caching, overrides, and derived fueling plans.
-- `src/calc/` – Nutrition math (windows, macros, deficit allocation).
-- `src/components/SettingsPanel.tsx` – Settings UI with sync controls and log.
-- `src/pages/` – Planner views (profile, windows, weekly, onboarding).
-
-## Troubleshooting syncs
-
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| Sync log shows 403 on `/athlete/0` | Planned workout access disabled or wrong API key | Re-check API key, ensure “Allow access to planned workouts (API)” is enabled. |
-| Planner still shows sample profile | Sync failed or cached window never refreshed | Check Sync Log, re-run refresh, or clear IndexedDB `PreburnerPlanner` data. |
-| Clipboard copy fails | Browser blocked clipboard API | Grant clipboard permission or copy the log manually. |
-
-If you open an issue / share a log, make sure to remove your API key and any personal info first.
-
-Happy fueling!
+v1 is preserved at the `v1-legacy` tag.

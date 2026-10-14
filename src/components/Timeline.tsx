@@ -1,4 +1,5 @@
-import { Check, ChevronDown, Clock, Droplets, Pencil, Zap } from 'lucide-react';
+import { Check, ChevronDown, Clock, Droplets, Pencil, Send, Zap } from 'lucide-react';
+import { IntervalsClient } from '../intervals/client';
 import { useState } from 'react';
 import { formatClock, formatDuration } from '../engine/time';
 import type { DayPlan, MealSlot } from '../engine/types';
@@ -83,6 +84,30 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
   );
 }
 
+function SendFuelToIntervals({ workout, carbPerHour }: { workout: ResolvedWorkout; carbPerHour: number }) {
+  const conn = useApp((s) => s.connection);
+  const sync = useApp((s) => s.sync);
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const eventId = workout.id.startsWith('icu-') ? Number(workout.id.slice(4)) : undefined;
+  if (conn.mode !== 'intervals' || !conn.intervalsKey || !eventId || workout.completed || workout.carbsPerHourOverride === carbPerHour) return null;
+  const send = async () => {
+    if (!confirm(`Set carbs/hour on "${workout.title}" in Intervals.icu to ${carbPerHour} g/h?`)) return;
+    setState('sending');
+    try {
+      await new IntervalsClient(conn.intervalsKey!, conn.athleteId).updateEvent(eventId, { carbs_per_hour: carbPerHour });
+      setState('sent');
+      void sync();
+    } catch {
+      setState('error');
+    }
+  };
+  return (
+    <button onClick={() => void send()} disabled={state === 'sending' || state === 'sent'} className="mt-2 ml-3 inline-flex items-center gap-1 text-xs text-muted hover:text-ink disabled:opacity-60">
+      <Send size={11} /> {state === 'sent' ? 'Sent to Intervals' : state === 'error' ? 'Failed — retry' : state === 'sending' ? 'Sending…' : 'Send g/h to Intervals'}
+    </button>
+  );
+}
+
 function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorkout }) {
   const [editing, setEditing] = useState(false);
   const color = INTENSITY_COLOR[workout.intensity];
@@ -162,6 +187,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
             <Pencil size={11} /> Change time
           </button>
         )}
+        {f && f.carbPerHour > 0 && <SendFuelToIntervals workout={workout} carbPerHour={f.carbPerHour} />}
       </div>
       <WorkoutTimeSheet open={editing} onClose={() => setEditing(false)} workout={workout} />
     </div>

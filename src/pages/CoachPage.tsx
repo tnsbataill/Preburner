@@ -2,7 +2,6 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { ArrowUp, Bot, Check, KeyRound, Loader2, NotebookPen, Plus, RotateCcw, Shuffle, Sparkles, Square, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { navigate } from '../App';
-import { describeCoachError, runCoach } from '../coach/agent';
 import { applyChange } from '../coach/apply';
 import { applyChanges, runTool } from '../coach/tools';
 import type { Proposal, ProposalChange } from '../coach/types';
@@ -176,6 +175,8 @@ export function CoachPage() {
     s.update((st) => ({ coach: { ...st.coach, messages: [...st.coach.messages, userMsg] } }));
     abort.current = new AbortController();
     const collected: string[] = [];
+    // The SDK is only downloaded once the coach is actually used.
+    const { runCoach, describeCoachError } = await import('../coach/agent');
     try {
       const res = await runCoach({
         apiKey: s.connection.anthropicKey,

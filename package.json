@@ -1,15 +1,16 @@
 {
   "name": "preburner",
-  "version": "0.0.1",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p . && vite build",
-    "debug:deficit": "node --loader ts-node/esm scripts/debug-deficit.ts",
     "preview": "vite preview",
     "test": "vitest run",
-    "demo": "tsc --project tsconfig.demo.json && node --experimental-specifier-resolution=node dist-demo/scripts/demo.js"
+    "test:e2e": "playwright test",
+    "test:live": "vitest run src/intervals/__tests__/live.e2e.test.ts",
+    "test:all": "vitest run && playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",
