@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowRight, Info, ShieldCheck, Siren } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GlycogenChart } from '../components/GlycogenChart';
-import { Timeline } from '../components/Timeline';
+import { Timeline, focusSlot } from '../components/Timeline';
 import { WeighInCard } from '../components/WeighIn';
 import { bandFor } from '../engine/plan';
 import { addDays, diffDays, formatClock, formatDate, formatDuration, nowMinutes, weekdayShort } from '../engine/time';
@@ -88,8 +88,8 @@ function NextUp({ day, nowMin }: { day: DayPlan; nowMin: number }) {
   const live = next.kind === 'during' && inMin <= 0;
   const when = live ? 'Now' : inMin <= 0 ? 'Now' : inMin < 60 ? `in ${inMin} min` : `in ${formatDuration(inMin)}`;
   return (
-    <div className="relative overflow-hidden rounded-2xl p-[1px] ember-bg shadow-glow">
-      <div className="flex items-center gap-4 rounded-[19px] bg-surface/95 p-4">
+    <button onClick={() => focusSlot(next.id)} className="group relative block w-full overflow-hidden rounded-2xl p-[1px] text-left ember-bg shadow-glow">
+      <div className="flex items-center gap-4 rounded-[19px] bg-surface/95 p-4 transition group-hover:bg-surface/85">
         <div className="min-w-0 flex-1">
           <div className="label mb-1 text-ember">Up next · {when}</div>
           <div className="truncate text-lg font-semibold">{next.label}</div>
@@ -98,9 +98,11 @@ function NextUp({ day, nowMin }: { day: DayPlan; nowMin: number }) {
             {next.fueling ? `${next.fueling.carbPerHour} g carbs/h, ${next.fueling.fluidMlPerHour} ml/h` : `${next.macros.carbG}C · ${next.macros.proteinG}P · ${next.macros.fatG}F`}
           </div>
         </div>
-        <ArrowRight className="shrink-0 text-ember" />
+        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-ember">
+          Details <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+        </span>
       </div>
-    </div>
+    </button>
   );
 }
 

@@ -1,0 +1,14 @@
+2026-03-02 [high → tomorrow rest] PROTECTED
+  energy: tdee 3802 (bmr 1693 + neat 592 + ex 1517) target 3802 deficit 0 EA 32
+  macros: C 614g (8.2 g/kg)  P 134g  F 90g
+  workout: 7:30am AM threshold 1h15 Threshold IF 0.89 989kJ load 99
+  workout: 5:30pm PM endurance 1h Endurance IF 0.68 605kJ load 46
+    7am              Pre-ride snack                     C  38 P   0 F   0   152kcal
+    7:30am–8:45am    AM threshold                       C  88 P   0 F   0   352kcal  [70 g/h, 650 ml/h, 650 mg Na/h]
+    9:15am           Breakfast · recovery               C 160 P  36 F  28  1036kcal
+    12:30pm          Lunch · pre-ride                   C 131 P  29 F  16   784kcal
+    4:30pm           Pre-ride snack                     C  26 P   0 F   0   104kcal
+    5:30pm–6:30pm    PM endurance                       C  20 P   0 F   0    80kcal  [20 g/h, 650 ml/h, 650 mg Na/h]
+    6:45pm           Dinner · recovery                  C 130 P  36 F  28   916kcal
+    9:45pm           Before bed                         C  21 P  33 F  18   378kcal
+  ! info: protected
