@@ -1,44 +1,106 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bg: 247 246 243;
+  --surface: 255 255 255;
+  --raised: 241 239 234;
+  --line: 228 225 218;
+  --ink: 23 23 28;
+  --muted: 104 104 118;
+  --faint: 160 158 168;
+  --ember: 240 90 40;
+  --amber: 245 158 11;
+  --carb: 226 146 22;
+  --protein: 37 140 230;
+  --fat: 139 92 246;
+  --good: 22 163 74;
+  --warn: 217 119 6;
+  --bad: 220 38 38;
+  --i-recovery: 120 128 148;
+  --i-endurance: 16 170 120;
+  --i-tempo: 202 160 8;
+  --i-threshold: 234 110 30;
+  --i-vo2: 225 45 80;
+  --i-race: 200 70 220;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 10 10 14;
+  --surface: 19 19 26;
+  --raised: 27 27 36;
+  --line: 40 40 52;
+  --ink: 237 237 242;
+  --muted: 154 154 171;
+  --faint: 98 98 114;
+  --ember: 255 106 61;
+  --amber: 255 181 71;
+  --carb: 245 176 65;
+  --protein: 79 179 255;
+  --fat: 179 136 255;
+  --good: 52 211 153;
+  --warn: 251 191 36;
+  --bad: 248 113 113;
+  --i-recovery: 139 147 167;
+  --i-endurance: 52 211 153;
+  --i-tempo: 250 204 21;
+  --i-threshold: 251 146 60;
+  --i-vo2: 244 63 94;
+  --i-race: 232 121 249;
   color-scheme: dark;
 }
 
-.print-only {
-  display: none;
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
-@media print {
-  :root {
-    color-scheme: light;
-  }
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-tap-highlight-color: transparent;
+}
 
-  body {
-    background: #ffffff;
-    color: #000000;
-  }
+.num {
+  font-variant-numeric: tabular-nums;
+}
 
-  .screen-only {
-    display: none !important;
-  }
+.card {
+  @apply rounded-2xl border border-line/70 bg-surface shadow-card;
+}
 
-  .print-only {
-    display: block !important;
-  }
+.label {
+  @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
+}
 
-  .print-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
+.ember-text {
+  background: linear-gradient(90deg, rgb(var(--ember)), rgb(var(--amber)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
-  .print-table th,
-  .print-table td {
-    border: 1px solid #1f2937;
-    padding: 4px 6px;
-    font-size: 0.75rem;
-    text-align: left;
-  }
+.ember-bg {
+  background: linear-gradient(135deg, rgb(var(--ember)), rgb(var(--amber)));
+}
+
+input[type='range'] {
+  accent-color: rgb(var(--ember));
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

@@ -45,8 +45,9 @@ export interface RateResult {
  */
 export function resolveWeeklyRate(goals: Goals, currentKg: number, today: DateKey): RateResult {
   const flags: PlanFlag[] = [];
+  // A dated target weight takes precedence over a fixed weekly rate.
   let requested = goals.weeklyRateKg ?? 0;
-  if (goals.weeklyRateKg === undefined && goals.targetWeightKg && goals.targetWeightDate) {
+  if (goals.targetWeightKg && goals.targetWeightDate) {
     const weeks = diffDays(today, goals.targetWeightDate) / 7;
     if (weeks > 0.5) requested = (goals.targetWeightKg - currentKg) / weeks;
     else if (Math.abs(goals.targetWeightKg - currentKg) > 0.3)

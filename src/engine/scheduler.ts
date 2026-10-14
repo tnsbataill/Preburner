@@ -74,7 +74,9 @@ export interface DaySlotInput {
 
 export function planDaySlots(input: DaySlotInput): MealSlot[] {
   const { schedule, workouts } = input;
-  const wake = schedule.wakeMin;
+  // A session before the usual wake time means the athlete is up earlier today.
+  const firstStart = workouts[0]?.resolvedStartMin ?? Infinity;
+  const wake = Math.min(schedule.wakeMin, firstStart - 45);
   const sleep = schedule.sleepMin;
 
   let drafts: Draft[] = [

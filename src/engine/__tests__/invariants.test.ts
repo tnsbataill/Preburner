@@ -86,3 +86,11 @@ describe('weekly deficit', () => {
     expect(wk.placedDeficit).toBeGreaterThan(wk.targetDeficit * 0.5);
   });
 });
+
+describe('goal resolution', () => {
+  it('a dated target weight wins over a leftover fixed rate', async () => {
+    const { resolveWeeklyRate } = await import('../goals');
+    const r = resolveWeeklyRate({ ...settings.goals, weeklyRateKg: 0, targetWeightKg: 73, targetWeightDate: '2026-04-27' }, 75, '2026-03-02');
+    expect(r.weeklyRateKg).toBeCloseTo(-0.25, 2);
+  });
+});
