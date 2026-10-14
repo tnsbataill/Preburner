@@ -6,3 +6,10 @@ yarn.lock
 .env
 
 dist-demo
+*.tsbuildinfo
+test-results
+playwright-report
+# never commit personal data exports
+**/snapshots/*.json
+.env.local
+node_modules.nosync
