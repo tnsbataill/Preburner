@@ -37,9 +37,14 @@ export function activityToRide(a: IcuActivity, ftpFallback: number): RideRecord 
   if (/e-?bike/i.test(a.type ?? '')) return undefined;
   const at = parseLocal(a.start_date_local);
   if (!at) return undefined;
+  // Strava-sourced activities come back as stubs: a date and nothing else (not
+  // even the sport). Keep the fact that something was recorded; the history
+  // decides what it means against the plan.
+  if (a.source === 'STRAVA' && a.icu_training_load === undefined) {
+    return { id: `act-${a.id}`, date: at.date, startMin: at.min, durationMin: 0, tss: 0, domain: { low: 0, mid: 0, high: 0 }, ftpSet: ftpFallback, noData: true, source: 'intervals' };
+  }
   const secs = a.moving_time || a.elapsed_time || 0;
-  // Strava-sourced activities come back as stubs without data.
-  if (secs < 300 || (a.icu_training_load === undefined && a.source === 'STRAVA')) return undefined;
+  if (secs < 300) return undefined;
   const ftp = a.icu_ftp || ftpFallback;
   const ifactor = a.icu_intensity ? a.icu_intensity / 100 : a.icu_weighted_avg_watts ? a.icu_weighted_avg_watts / ftp : 0.65;
   const tss = a.icu_training_load ?? (secs / 3600) * ifactor * ifactor * 100;

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../engine/defaults';
 import { addDays } from '../../engine/time';
-import { INITIAL_TRAINING, type TrainingState, answerMissed, answerRideIssue, applyFeedback, debriefQueue, historyRides, runAdaptation } from '../../state/training';
+import { INITIAL_TRAINING, type TrainingState, recentNoDataRides, answerMissed, answerRideIssue, applyFeedback, debriefQueue, historyRides, runAdaptation } from '../../state/training';
 import { isQuality, personalRpe } from '../adapt';
 import { perfObservations } from '../fit';
+import { activityToRide } from '../history/intervals';
 import { targetDate } from '../optimize';
 import { generatePlan } from '../generator';
 import type { RideRecord, WellnessRecord } from '../history/types';
@@ -193,6 +194,30 @@ describe('rides that did not go to plan', () => {
     const obs = (issue?: 'unwell') => perfObservations([{ ...withPower, issue }]).find((o) => o.date === r.date)!.kind;
     expect(obs()).toBe('max');
     expect(obs('unwell')).toBe('bound');
+  });
+});
+
+describe('rides that reached Intervals only through Strava', () => {
+  // What the Intervals API returns for a Strava-sourced activity: a date, nothing else.
+  const stub = (date: string, id = 's1') => activityToRide({ id, start_date_local: `${date}T07:00:00`, source: 'STRAVA' }, 260)!;
+
+  it('on a planned day: assumed ridden as planned, not asked about, not caught up', () => {
+    let t = state({ skip: missed });
+    t = { ...t, intervalsRides: [...t.intervalsRides, stub(missed.date)] };
+    const assumed = historyRides(t).find((r) => r.date === missed.date)!;
+    expect(assumed).toMatchObject({ assumed: true, tss: missed.tss, kind: missed.kind, plannedId: missed.id });
+    expect(debriefQueue(t, today)).toEqual([]);
+    t = apply(t, runAdaptation(t, today, 260));
+    expect(t.adjustments.some((a) => a.movedFrom === missed.id)).toBe(false);
+    expect(recentNoDataRides(t, today)).toHaveLength(1);
+  });
+
+  it('on a rest day it could be anything, so it adds no load; next to a real ride it is ignored', () => {
+    const restDay = [1, 2, 3, 4, 5, 6].map((o) => addDays(missed.date, -o)).find((d) => !plan.sessions.some((s) => s.date === d))!;
+    const t = { ...state(), intervalsRides: [...state().intervalsRides, stub(restDay, 's2'), stub(addDays(missed.date, -7), 's3')] };
+    const rides = historyRides(t);
+    expect(rides.some((r) => r.date === restDay)).toBe(false);
+    expect(rides.filter((r) => r.date === addDays(missed.date, -7)).every((r) => !r.assumed)).toBe(true);
   });
 });
 

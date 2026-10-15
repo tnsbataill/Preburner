@@ -35,6 +35,10 @@ export interface RideRecord {
   level?: number;
   /** planned session this ride executed */
   plannedId?: string;
+  /** recorded, but only reached Intervals via Strava, whose data the API won't share */
+  noData?: boolean;
+  /** load filled in from the planned session (the ride itself had no data) */
+  assumed?: boolean;
   source: 'strava' | 'intervals' | 'sim';
 }
 

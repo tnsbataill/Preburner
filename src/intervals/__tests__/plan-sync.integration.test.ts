@@ -39,6 +39,8 @@ class FakeIntervals {
       source: 'GARMIN_CONNECT',
     };
   });
+  // A ride that reached Intervals via Strava: the API returns only a stub.
+  stravaStub = { id: 'strava1', start_date_local: `${d(-2)}T07:00:00`, source: 'STRAVA', _note: 'STRAVA activities are not available via the API' };
   fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const p = url.pathname;
@@ -60,7 +62,7 @@ class FakeIntervals {
       this.events = this.events.filter((e) => e.id !== Number(del[1]));
       return new Response(null, { status: 204 });
     }
-    if (p.endsWith('/activities')) return json(this.activities);
+    if (p.endsWith('/activities')) return json([...this.activities, this.stravaStub]);
     const act = /\/activity\/([^/]+)$/.exec(p);
     if (act && method === 'PUT') {
       this.activityPuts.push({ id: act[1], body: JSON.parse(String(init!.body)) });
@@ -99,6 +101,8 @@ describe('training plan <-> Intervals.icu', () => {
     expect(hard.domain.mid).toBeGreaterThan(hard.domain.low);
     expect(0.95 * hard.best20!).toBeCloseTo(300, -1);
     expect(t.wellness.at(-1)!.lnRmssd).toBeCloseTo(Math.log(64), 1);
+    // The Strava stub is kept as "something was recorded", with no data.
+    expect(t.intervalsRides.find((r) => r.id === 'act-strava1')).toMatchObject({ date: d(-2), noData: true, tss: 0 });
   });
 
   it('plans with the Intervals FTP, keeps the race, and sends the plan once', async () => {

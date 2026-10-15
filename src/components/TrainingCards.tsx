@@ -1,8 +1,8 @@
-import { Activity, CircleHelp, HeartPulse, MessageCircleQuestion, Sparkles } from 'lucide-react';
+import { Activity, CircleHelp, HeartPulse, MessageCircleQuestion, PlugZap, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { addDays, formatDate, formatDuration } from '../engine/time';
 import { useApp } from '../state/store';
-import { debriefQueue, historyRides } from '../state/training';
+import { debriefQueue, historyRides, recentNoDataRides } from '../state/training';
 import { ISSUE_LABEL, MISSED_LABEL } from '../training/debrief';
 import type { MissedReason, RideIssue } from '../training/history/types';
 import { useToday } from '../state/usePlan';
@@ -141,7 +141,7 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
                 <Activity size={14} className="text-muted" />
                 <span className="font-medium">{r.kind ? KIND_LABEL[r.kind] ?? r.kind : 'Ride'}</span>
                 <span className="text-muted">
-                  {formatDate(r.date, { weekday: true })} · {formatDuration(r.durationMin)}
+                  {formatDate(r.date, { weekday: true })} · {r.assumed ? 'no data, assumed as planned' : formatDuration(r.durationMin)}
                 </span>
               </div>
               <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">Effort (RPE)</div>
@@ -287,6 +287,35 @@ export function DebriefPrompt() {
           {last}
         </p>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Rides that reached Intervals only through Strava come with no data (the
+ * Intervals API can't pass Strava data on). The plan assumes planned sessions
+ * on those days were ridden as planned; this says so and how to fix it.
+ */
+export function NoDataNotice() {
+  const training = useApp((s) => s.training);
+  const mode = useApp((s) => s.connection.mode);
+  const today = useToday();
+  const n = useMemo(() => recentNoDataRides(training, today).length, [training, today]);
+  if (mode !== 'intervals' || !n) return null;
+  return (
+    <Card className="border-warn/40 p-4" data-testid="no-data-notice">
+      <div className="flex items-start gap-3 text-sm">
+        <PlugZap size={18} className="mt-0.5 shrink-0 text-warn" />
+        <div>
+          <div className="font-medium">
+            {n} {n === 1 ? 'activity' : 'activities'} in the last two weeks came through Strava without data
+          </div>
+          <p className="mt-1 text-muted">
+            Intervals.icu can't share Strava's ride data, so on planned days Preburner assumes you rode the session as planned and can't see how it went. Connect your bike computer and Zwift to
+            Intervals directly (Intervals → Settings → Connections) and new rides arrive with power and duration.
+          </p>
+        </div>
+      </div>
     </Card>
   );
 }

@@ -76,7 +76,19 @@ export function historyRides(t: TrainingState): RideRecord[] {
     byDate.set(s.date, s);
     byId.set(s.id, s);
   }
-  return merged.map((r) => {
+  // A no-data activity (it reached Intervals only via Strava) on a planned day
+  // with nothing better that day: assume the session was ridden as planned
+  // rather than call it skipped. Anywhere else it could be anything (a walk,
+  // golf), so it's left out.
+  const withData = new Set(merged.filter((r) => !r.noData && r.durationMin > 0).map((r) => r.date));
+  const assumed: RideRecord[] = [];
+  for (const r of merged.filter((x) => x.noData)) {
+    const s = byDate.get(r.date);
+    if (!s || withData.has(r.date) || assumed.some((x) => x.date === r.date)) continue;
+    const fb = t.feedback[r.id];
+    assumed.push({ ...r, durationMin: s.durationMin, tss: s.tss, domain: s.domain, ftpSet: t.ftp ?? plan!.request.ftp, kind: s.kind, level: s.level, plannedId: s.id, assumed: true, rpe: fb?.rpe, feel: fb?.feel });
+  }
+  const real = merged.filter((r) => !r.noData).map((r) => {
     const fb = t.feedback[r.id];
     const issue = t.rideIssues?.[r.id];
     // A ride on a plan day executed that session: tag it so RPE steers the
@@ -92,6 +104,12 @@ export function historyRides(t: TrainingState): RideRecord[] {
       ...(matches ? { kind: s.kind, level: s.level, plannedId: s.id } : {}),
     };
   });
+  return [...real, ...assumed].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/** Recent activities that reached Intervals only via Strava (so carry no data). */
+export function recentNoDataRides(t: TrainingState, today: DateKey, days = 14): RideRecord[] {
+  return t.intervalsRides.filter((r) => r.noData && r.date >= addDays(today, -days) && r.date <= today);
 }
 
 /**
