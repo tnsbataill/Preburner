@@ -135,3 +135,17 @@ test('"what happened?" after skipped or cut-short sessions changes the plan', as
   await page.reload();
   await expect(page.getByRole('group', { name: label! })).toHaveCount(0);
 });
+
+test('a cut-short session answered "couldn\'t hold the targets" steps the next one back', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-14T09:00:00') });
+  await onboardWithDemo(page);
+  await generate(page);
+  await page.clock.setSystemTime(new Date('2026-10-25T09:00:00'));
+  await page.reload();
+  await page.goto('/#/today');
+  const card = page.getByTestId('debrief-prompt');
+  await expect(card).toContainText('Sweet spot: 2x30 sweet spot · Sat, Oct 24 · 1h23 of 1h50');
+  await card.getByRole('group', { name: /was cut short/ }).getByRole('button', { name: "Couldn't hold the targets" }).click();
+  await expect(card.getByRole('status')).toContainText('the next one steps back');
+  await expect(page.getByTestId('readiness-card')).toContainText(/sweetspot .*couldn't hold/);
+});

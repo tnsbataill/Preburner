@@ -32,7 +32,8 @@ export function perfObservations(rides: RideRecord[]): PerfObs[] {
     if (r.isTest) kind = 'test';
     // Probably maximal: the athlete said so (RPE 9+), or it matches the best
     // 20-min power of the past year (once there's enough history to know).
-    else if ((r.rpe ?? 0) >= 9 && r.best20! > 0) kind = 'max';
+    // (Not when the ride was cut short, hit kit trouble, or ridden unwell.)
+    else if ((r.rpe ?? 0) >= 9 && r.best20! > 0 && (!r.issue || r.issue === 'too-hard')) kind = 'max';
     else if (first && diffDays(first, r.date) >= 90 && w >= best365 * 0.985) kind = 'max';
     out.push({ date: r.date, watts: w, kind });
     recent.push({ date: r.date, w });

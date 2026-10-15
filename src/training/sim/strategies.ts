@@ -27,7 +27,7 @@ export interface Strategy {
   mode: FitMode;
   adapt?: Partial<AdaptConfig> | false;
   /** athlete answers "what happened?"; misreport = share of tired skips reported as no time */
-  debrief?: { misreport: number };
+  debrief?: { misreport: number; /** ablation: answer this instead of "sick" */ sickAs?: MissedReason };
 }
 
 export const STRATEGIES: Record<string, Strategy> = {
@@ -152,7 +152,8 @@ export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, se
       const tomorrow = addDays(day, 1);
       let res: { sessions: TrainingPlan['sessions']; adjustments: Adjustment[] } | undefined;
       if (!ride && a.lastSkip) {
-        const reason: MissedReason = a.lastSkip === 'tired' && a.answerDraw < strat.debrief.misreport ? 'time' : a.lastSkip;
+        const said: MissedReason = a.lastSkip === 'tired' && a.answerDraw < strat.debrief.misreport ? 'time' : a.lastSkip;
+        const reason = said === 'sick' ? (strat.debrief.sickAs ?? said) : said;
         missedReasons[s.id] = reason;
         simLog?.(`${day} answered: skipped ${s.kind} (${reason})`);
         res = applyMissedReason(plan.sessions, s, reason, tomorrow, history, plan.intensityScale);

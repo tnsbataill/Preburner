@@ -1,7 +1,7 @@
 import { addDays, diffDays, weekdayOf } from '../engine/time';
 import type { DateKey, Schedule, Workout } from '../engine/types';
 import type { NewEvent } from '../intervals/client';
-import { type AdaptConfig, type Adjustment, DEFAULT_ADAPT, type Readiness, adaptDay, applyRpe, readiness } from '../training/adapt';
+import { type AdaptConfig, type Adjustment, DEFAULT_ADAPT, type Readiness, adaptDay, applyRpe, isQuality, readiness } from '../training/adapt';
 import { dayLoads } from '../training/fit';
 import { generatePlan, planEnd, sessionToWorkout } from '../training/generator';
 import type { ImportReport } from '../training/history/strava';
@@ -115,15 +115,18 @@ export function applyFeedback(t: TrainingState, rideId: string, today: DateKey):
 
 export type DebriefItem =
   | { type: 'missed'; session: PlannedSession }
-  | { type: 'short'; session: PlannedSession; ride: RideRecord };
+  | { type: 'short'; session: PlannedSession; ride: RideRecord; why: 'time' | 'load'; tss: number };
 
 /**
  * Sessions to ask "what happened?" about: quality or long sessions in the last
- * three days that were skipped, or ridden at under 80% of the planned time.
+ * three days that were skipped, ridden at under 80% of the planned time, or
+ * (quality only) ridden full length at under 80% of the planned load, e.g.
+ * intensity turned down or intervals backed off.
  */
 export function debriefQueue(t: TrainingState, today: DateKey): DebriefItem[] {
   if (!t.plan) return [];
   const rides = historyRides(t);
+  const planFtp = t.ftp ?? t.plan.request.ftp;
   const out: DebriefItem[] = [];
   for (const s of t.plan.sessions) {
     if (s.date < addDays(today, -3) || s.date >= today || s.date < t.plan.request.start || !worthAsking(s)) continue;
@@ -133,7 +136,11 @@ export function debriefQueue(t: TrainingState, today: DateKey): DebriefItem[] {
       continue;
     }
     const ride = onDay.reduce((a, b) => (b.durationMin > a.durationMin ? b : a));
-    if (ride.durationMin < 0.8 * s.durationMin && !t.rideIssues?.[ride.id]) out.push({ type: 'short', session: s, ride });
+    if (t.rideIssues?.[ride.id]) continue;
+    // TSS against the plan's FTP, so a different FTP setting doesn't look like a short ride.
+    const tss = Math.round(ride.tss * (ride.ftpSet / planFtp) ** 2);
+    if (ride.durationMin < 0.8 * s.durationMin) out.push({ type: 'short', session: s, ride, why: 'time', tss });
+    else if (isQuality(s) && tss < 0.8 * s.tss) out.push({ type: 'short', session: s, ride, why: 'load', tss });
   }
   return out.slice(-2);
 }
@@ -155,7 +162,7 @@ export function answerMissed(t: TrainingState, sessionId: string, reason: Missed
   return {
     missedReasons,
     plan: { ...t.plan, sessions: res.sessions },
-    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today })), ...t.adjustments].slice(0, 60),
+    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today, source: 'debrief' as const })), ...t.adjustments].slice(0, 60),
     dirtyIds: dirty(t, t.plan.sessions, res.sessions),
   };
 }
@@ -174,7 +181,7 @@ export function answerRideIssue(t: TrainingState, rideId: string, issue: RideIss
     plan: { ...t.plan, sessions: res.sessions, intensityScale: res.scales },
     // Its RPE (now or later) has been accounted for by this answer.
     reviewedRides: [...new Set([...t.reviewedRides, rideId])].slice(-200),
-    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today })), ...t.adjustments].slice(0, 60),
+    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today, source: 'debrief' as const })), ...t.adjustments].slice(0, 60),
     dirtyIds: dirty(t, t.plan.sessions, res.sessions),
   };
 }
@@ -201,7 +208,8 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   if (today < plan.request.start || today > addDays(planEnd(plan), 1)) return { lastAdapt: today, readiness: readiness(t.wellness, today, tsb, cfg, rides) };
   const since = t.lastAdapt ? addDays(t.lastAdapt, 0) : addDays(today, -1);
   // Rides whose RPE was already applied (answered in-app) don't count twice.
-  const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade').map((a) => a.date);
+  // Only readiness swaps count toward its cap; "I was sick" swaps don't.
+  const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade' && a.source !== 'debrief').map((a) => a.date);
   const working = mode === 'intervals' ? ftp : (t.ftp ?? ftp);
   const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {} }, cfg);
   const ftpAdj = out.adjustments.filter((a) => a.action === 'ftp').at(-1);

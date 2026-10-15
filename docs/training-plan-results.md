@@ -102,7 +102,7 @@ Paired against the same optimised plan without adaptation (60 riders):
 
 ## 5. Does asking "what happened?" help?
 
-After a skipped or cut-short quality session, the athlete says why (`src/training/debrief.ts`):
+After a skipped or under-target quality session, the athlete says why (`src/training/debrief.ts`). A ride counts as under target at under 80% of the planned time, or full length at under 80% of the planned TSS (rescaled to the plan's FTP). Any recent quality ride also has a "Didn't go to plan?" link:
 
 | Answer | What the plan does |
 | --- | --- |
@@ -110,6 +110,7 @@ After a skipped or cut-short quality session, the athlete says why (`src/trainin
 | Too tired or stressed | No catch-up; the next hard day is one level easier |
 | Sick | No catch-up; easy spins for three days, then the first hard day back is eased |
 | Injured | No hard sessions for a week; the long-gap replan rebuilds on return |
+| Skipped FTP test, no time | Moved to the next free day, even past the plan's end |
 | Ride: ran out of time, kit issue | Nothing; its RPE is ignored |
 | Ride: couldn't hold the targets | Counts as a failed session (step back, then lower that kind's targets) |
 | Ride: felt ill or wrecked | Not a failure; RPE ignored; next hard day eased |
@@ -117,7 +118,8 @@ After a skipped or cut-short quality session, the athlete says why (`src/trainin
 Paired against adaptation without the questionnaire (60 riders, 12 weeks): **−0.05 ± 0.02 pp**, worst −0.75, no change in sick days, and the same result with 20% or 50% of "tired" skips misreported as "no time".
 
 - The sim world rarely produces the cases the questionnaire is for: 164 "no time" skips, 36 sick, 7 tired, and 1 failure while unwell across all riders.
-- The small cost is the sick path's easy days. The truth model has no penalty for training hard straight after illness, so it can only see the lost training, not the benefit.
+- The cost is the sick path, tested by ablation. Answering "sick" as "no time" gives +0.00 ± 0.01 pp; answering it as "tired" gives −0.02 ± 0.01 pp.
+- In the truth model, illness only lowers performance and blocks riding while it lasts. Training hard straight afterwards has no extra cost or relapse risk. So the sim can see the training lost to easy days, but not any benefit from a graded return. The app keeps the graded return because return-to-exercise guidance favours it; this sim can't test that choice.
 - **The real reason for the feature:** in the app, nothing set the "failed" flag before this. Repeated failures were supposed to lower a session type's targets, but only the simulator could trigger it. Now "couldn't hold the targets" does.
 - **Bug found while testing:** catching up a missed session treated the missed session itself as a hard day, so the day after a miss could never take the make-up.
 

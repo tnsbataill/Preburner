@@ -97,6 +97,8 @@ const KIND_LABEL: Record<string, string> = {
   ftptest: 'FTP test',
 };
 
+const HARD_KINDS = new Set(['sweetspot', 'threshold', 'overunder', 'vo2', 'anaerobic']);
+
 const RPE_HINT: Record<number, string> = { 1: 'Nothing', 3: 'Easy', 5: 'Steady', 7: 'Hard', 9: 'Very hard', 10: 'Max' };
 const FEEL = [
   { v: 1, label: 'Strong' },
@@ -116,7 +118,7 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
     () =>
       historyRides(training)
         .filter((r) => r.date >= addDays(today, -3) && r.date <= today && r.durationMin >= 20)
-        .filter((r) => r.rpe === undefined || r.feel === undefined || training.feedback[r.id])
+        .filter((r) => r.rpe === undefined || r.feel === undefined || training.feedback[r.id] || (r.plannedId && r.kind && HARD_KINDS.has(r.kind) && !training.rideIssues?.[r.id]))
         .slice(-2),
     [training, today],
   );
@@ -160,7 +162,7 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
                 <span>easy</span>
                 <span>max</span>
               </div>
-              {r.plannedId && r.kind && <OffPlan rideId={r.id} sessionId={r.plannedId} answered={training.rideIssues?.[r.id]?.issue} />}
+              {r.plannedId && r.kind && HARD_KINDS.has(r.kind) && <OffPlan rideId={r.id} sessionId={r.plannedId} answered={training.rideIssues?.[r.id]?.issue} />}
               <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">How you felt</div>
               <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={`Feel for ride on ${r.date}`}>
                 {FEEL.map((f) => (
@@ -253,7 +255,7 @@ export function DebriefPrompt() {
               <span className="font-medium">{it.session.title}</span>
               <span className="text-muted">
                 {' '}
-                · {formatDate(it.session.date, { weekday: true })} · {it.type === 'missed' ? 'skipped' : `${formatDuration(it.ride.durationMin)} of ${formatDuration(it.session.durationMin)}`}
+                · {formatDate(it.session.date, { weekday: true })} · {it.type === 'missed' ? 'skipped' : it.why === 'time' ? `${formatDuration(it.ride.durationMin)} of ${formatDuration(it.session.durationMin)}` : `TSS ${it.tss} of ${it.session.tss}`}
               </span>
             </div>
             {it.type === 'missed' ? (
@@ -270,7 +272,7 @@ export function DebriefPrompt() {
               <Choices
                 options={ISSUE_ORDER}
                 labels={ISSUE_LABEL}
-                label={`Why ${it.session.title} was cut short`}
+                label={`Why ${it.session.title} ${it.why === 'time' ? 'was cut short' : 'came in under target'}`}
                 onPick={(v) => {
                   answerIssue(it.ride.id, v, it.session.id);
                   setLast(v === 'too-hard' ? 'Counted as a missed target: the next one steps back.' : v === 'unwell' ? 'Your next hard day is eased.' : 'No change to your plan.');

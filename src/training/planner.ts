@@ -56,7 +56,8 @@ export function analyzeHistory(snap: AthleteSnapshot, mode: FitMode = 'core', en
   const recent = rides.filter((r) => r.date > addDays(today, -56) && r.kind && r.level);
   for (const r of recent) {
     const k = r.kind as HardKind;
-    if (!(k in MAX_LEVEL)) continue;
+    // A session cut short or ridden unwell says nothing about the level.
+    if (!(k in MAX_LEVEL) || (r.issue && r.issue !== 'too-hard')) continue;
     const ok = !r.failed && (r.rpe === undefined || r.rpe <= expectedRpe(k, r.level!) + 1);
     const lv = ok ? r.level! + 1 : r.level!;
     startLevels[k] = Math.min(MAX_LEVEL[k], Math.max(startLevels[k] ?? 1, lv));

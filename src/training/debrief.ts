@@ -1,6 +1,6 @@
 import { addDays } from '../engine/time';
 import type { DateKey } from '../engine/types';
-import { type Adjustment, DEFAULT_ADAPT, applyRpe, catchUp, isLogistics, isQuality, rebuild } from './adapt';
+import { type Adjustment, DEFAULT_ADAPT, applyRpe, catchUp, isCatchable, isLogistics, isQuality, rebuild } from './adapt';
 import type { MissedReason, RideIssue, RideRecord } from './history/types';
 import type { HardKind, PlannedSession } from './types';
 
@@ -37,11 +37,11 @@ export const worthAsking = (s: PlannedSession) => s.hard || s.kind === 'long';
 
 /** Put back what a catch-up move replaced, if that day is still ahead. */
 export function revertCatchUp(sessions: PlannedSession[], history: Adjustment[], missedId: string, today: DateKey): { sessions: PlannedSession[]; adjustments: Adjustment[] } {
-  const move = history.find((a) => a.action === 'move' && a.movedFrom === missedId && a.replaced);
+  const move = history.find((a) => a.action === 'move' && a.movedFrom === missedId && (a.replaced || a.created));
   const at = move && sessions.find((s) => s.id === move.sessionId);
   if (!move || !at || at.date < today) return { sessions, adjustments: [] };
   return {
-    sessions: sessions.map((s) => (s.id === at.id ? move.replaced! : s)),
+    sessions: move.created ? sessions.filter((s) => s.id !== at.id) : sessions.map((s) => (s.id === at.id ? move.replaced! : s)),
     adjustments: [{ date: at.date, action: 'drop', sessionId: at.id, reason: `Not catching up the missed session on ${at.date}: back to the easy ride planned for that day` }],
   };
 }
@@ -86,7 +86,7 @@ export function applyMissedReason(sessionsIn: PlannedSession[], missed: PlannedS
   const adjustments: Adjustment[] = [];
   const caughtUp = history.some((a) => a.action === 'move' && a.movedFrom === missed.id);
   if (isLogistics(reason)) {
-    if (!caughtUp && isQuality(missed)) {
+    if (!caughtUp && isCatchable(missed)) {
       const res = catchUp(sessions, missed, today, scales);
       sessions = res.sessions;
       if (res.adjustment) adjustments.push(res.adjustment);

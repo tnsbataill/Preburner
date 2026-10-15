@@ -113,6 +113,10 @@ export interface Adjustment {
   /** for catch-up moves: the missed session, and what the target day held before */
   movedFrom?: string;
   replaced?: PlannedSession;
+  /** the catch-up created a session on a free day (undo removes it) */
+  created?: boolean;
+  /** made from a "what happened?" answer (doesn't count toward readiness's swap cap) */
+  source?: 'debrief';
 }
 
 export interface AdaptInput {
@@ -163,6 +167,8 @@ export function rebuild(s: PlannedSession, kind: SessionKind, minutes: number, l
 }
 
 export const isQuality = (s: PlannedSession) => s.hard && s.kind !== 'ftptest';
+/** Sessions worth catching up when missed: quality work and FTP tests. */
+export const isCatchable = (s: PlannedSession) => isQuality(s) || s.kind === 'ftptest';
 
 /** Missed for reasons that say nothing about the body: the work still belongs in the week. */
 export const isLogistics = (r: MissedReason | undefined) => r === undefined || r === 'time' || r === 'travel' || r === 'equipment';
@@ -179,7 +185,18 @@ export function catchUp(sessions: PlannedSession[], missed: PlannedSession, toda
     .map((o) => addDays(today, o))
     .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && !sessions.some((s) => s.date === d && (s.kind === 'ftptest' || s.kind === 'openers')));
   const easy = target && sessions.find((s) => s.date === target && !s.hard);
-  if (!easy) return { sessions };
+  if (!easy) {
+    // A missed FTP test (often the plan's last day) goes on the next free day,
+    // even past the end of the plan: the plan is judged on it.
+    if (missed.kind !== 'ftptest') return { sessions };
+    const free = [0, 1, 2].map((o) => addDays(today, o)).find((d) => !sessions.some((s) => s.date === d) && !isHardOn(addDays(d, -1)));
+    if (!free) return { sessions };
+    const retest = { ...missed, id: `${missed.id}-retest`, date: free };
+    return {
+      sessions: [...sessions, retest].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+      adjustment: { date: free, action: 'move', sessionId: retest.id, movedFrom: missed.id, created: true, reason: `Moved missed ${missed.title} from ${missed.date}` },
+    };
+  }
   const moved = { ...rebuild(easy, missed.kind, Math.max(easy.durationMin, missed.durationMin), missed.level, scales[missed.kind as HardKind] ?? 1), id: easy.id };
   return {
     sessions: sessions.map((s) => (s === easy ? moved : s)),
@@ -270,7 +287,7 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   const replan = planned7.length >= 3 && missed.length >= Math.max(3, Math.ceil(planned7.length * 0.6));
   const isHardOn = (d: DateKey) => sessions.some((s) => s.date === d && isQuality(s));
   const yesterday = addDays(today, -1);
-  const missedHard = sessions.find((s) => s.date === yesterday && isQuality(s) && !ridesByDate.get(yesterday)?.length);
+  const missedHard = sessions.find((s) => s.date === yesterday && isCatchable(s) && !ridesByDate.get(yesterday)?.length);
   // Until the athlete says why, assume life got in the way and catch the work
   // up. An answer is handled where it's given (see debrief.ts).
   if (missedHard && !replan && input.missedReasons?.[missedHard.id] === undefined) {

@@ -11,6 +11,8 @@ const variants: Record<string, Strategy> = {
   'questionnaire, truthful': { ...base, debrief: { misreport: 0 } },
   'questionnaire, 20% of tired skips said "no time"': { ...base, debrief: { misreport: 0.2 } },
   'questionnaire, 50% misreported': { ...base, debrief: { misreport: 0.5 } },
+  'ablation: sick answered as "no time"': { ...base, debrief: { misreport: 0, sickAs: 'time' } },
+  'ablation: sick answered as "tired"': { ...base, debrief: { misreport: 0, sickAs: 'tired' } },
 };
 const rows: Record<string, RunResult[]> = {};
 for (const [name, strat] of Object.entries(variants)) {
