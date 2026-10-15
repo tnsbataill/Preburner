@@ -23,6 +23,7 @@ Reproduce:
 npx vite-node scripts/sim-backtest.ts 80        # model fit vs persistence
 npx vite-node scripts/sim-strategies.ts 60 12   # closed-loop plan comparison
 npx vite-node scripts/sim-tune-adapt.ts 60 on   # adaptation ablations
+npx vite-node scripts/sim-debrief.ts 60         # "what happened?" questionnaire
 ```
 
 ## 1. Can the model learn a rider from their history?
@@ -86,7 +87,7 @@ Paired against the same optimised plan without adaptation (60 riders):
 
 | Config | Δ gain | Sick days |
 | --- | --- | --- |
-| All on (default) | −0.09 ± 0.08 pp | 2.20 vs 2.30 |
+| All on (default) | −0.04 ± 0.09 pp | 2.20 vs 2.32 |
 | Readiness only | +0.02 ± 0.08 pp | 2.27 |
 | RPE/feel only | +0.01 ± 0.09 pp | 2.28 |
 | Readiness with narrow SWC (0.5 SD) | −0.17 ± 0.08 pp | 2.30 |
@@ -98,6 +99,27 @@ Paired against the same optimised plan without adaptation (60 riders):
   - Readiness kept cancelling sessions through a 6-week life-stress stretch. Now it makes at most 2 swaps a week, then eases sessions instead.
   - Repeated VO2 failures stepped levels down without fixing the real problem, which was the intensity. Now the session type's targets drop 3% at a time (down to −12%) and come back when sessions feel easy.
 - **Known limitation:** the simulator treats a failed interval as ridden at 95% of the rider's limit. That makes failing nearly free stimulus, so the sim probably understates the value of personalising intensity.
+
+## 5. Does asking "what happened?" help?
+
+After a skipped or cut-short quality session, the athlete says why (`src/training/debrief.ts`):
+
+| Answer | What the plan does |
+| --- | --- |
+| No time, travelling, bike issue | Catches the session up on an easy day in the next three |
+| Too tired or stressed | No catch-up; the next hard day is one level easier |
+| Sick | No catch-up; easy spins for three days, then the first hard day back is eased |
+| Injured | No hard sessions for a week; the long-gap replan rebuilds on return |
+| Ride: ran out of time, kit issue | Nothing; its RPE is ignored |
+| Ride: couldn't hold the targets | Counts as a failed session (step back, then lower that kind's targets) |
+| Ride: felt ill or wrecked | Not a failure; RPE ignored; next hard day eased |
+
+Paired against adaptation without the questionnaire (60 riders, 12 weeks): **−0.05 ± 0.02 pp**, worst −0.75, no change in sick days, and the same result with 20% or 50% of "tired" skips misreported as "no time".
+
+- The sim world rarely produces the cases the questionnaire is for: 164 "no time" skips, 36 sick, 7 tired, and 1 failure while unwell across all riders.
+- The small cost is the sick path's easy days. The truth model has no penalty for training hard straight after illness, so it can only see the lost training, not the benefit.
+- **The real reason for the feature:** in the app, nothing set the "failed" flag before this. Repeated failures were supposed to lower a session type's targets, but only the simulator could trigger it. Now "couldn't hold the targets" does.
+- **Bug found while testing:** catching up a missed session treated the missed session itself as a hard day, so the day after a miss could never take the make-up.
 
 ## What runs in the app
 

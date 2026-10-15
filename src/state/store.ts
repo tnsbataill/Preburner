@@ -9,7 +9,8 @@ import { syncIntervals, syncTrainingHistory } from '../intervals/sync';
 import { type AthleteSnapshot, type PlanOptions, planFromHistory } from '../training/planner';
 import { readArchive, toRideRecords } from '../training/history/strava';
 import { readZipStream } from '../training/history/zip';
-import { INITIAL_TRAINING, type Feedback, type TrainingState, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation } from './training';
+import type { MissedReason, RideIssue } from '../training/history/types';
+import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation } from './training';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
 
@@ -64,6 +65,8 @@ export interface AppState {
   importHistoryJson: (file: File) => Promise<void>;
   setFeedback: (rideId: string, fb: Feedback) => Promise<void>;
   adaptTraining: () => void;
+  answerMissed: (sessionId: string, reason: MissedReason) => void;
+  answerRideIssue: (rideId: string, issue: RideIssue, sessionId?: string) => void;
 }
 
 /** Everything the planner needs, from the store. */
@@ -260,6 +263,12 @@ export const useApp = create<AppState>()(
           await client.updateActivity(rideId.slice(4), { ...(fb.rpe ? { icu_rpe: fb.rpe } : {}), ...(fb.feel ? { feel: fb.feel } : {}) }).catch((err) => console.warn('Preburner: could not save feedback to Intervals', err));
         }
       },
+
+      answerMissed: (sessionId, reason) =>
+        set((s) => ({ training: { ...s.training, ...answerMissed(s.training, sessionId, reason, todayKey(s.settings.profile.timezone)) } })),
+
+      answerRideIssue: (rideId, issue, sessionId) =>
+        set((s) => ({ training: { ...s.training, ...answerRideIssue(s.training, rideId, issue, todayKey(s.settings.profile.timezone), sessionId) } })),
 
       adaptTraining: () => {
         const s = get();

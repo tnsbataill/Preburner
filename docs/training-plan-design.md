@@ -46,6 +46,10 @@ Goal: Preburner generates the full training plan (replacing TrainerRoad's), tune
    - Compliance from planned vs done TSS and failed or cut sessions.
    - Breakthroughs (new eFTP lifts zones); periodic refit.
    - Output: concrete adjustments (downgrade or swap today, push hard day, trim next week, re-plan remaining weeks) as coach-style proposals.
+8. **`debrief.ts`**: "what happened?" after a skipped or cut-short quality session (like TrainerRoad's post-workout survey).
+   - Skipped: no time / travelling / bike issue → catch the work up; too tired → no catch-up, ease the next hard day; sick → easy spins for three days, then ease back in; injured → no hard work for a week.
+   - Cut short (under 80% of planned time) or flagged "didn't go to plan": only "couldn't hold the targets" counts as a failed session. Time, kit and "felt ill" rides are left out of RPE progression and the athlete's RPE norm.
+   - Answers apply immediately. The daily check assumes "no time" until the athlete answers, and its catch-up move stores what it replaced so a later answer can undo it.
 
 ## Simulation (`src/training/sim/`, `scripts/simulate.ts`)
 
@@ -66,7 +70,7 @@ Goal: Preburner generates the full training plan (replacing TrainerRoad's), tune
 ## Integration
 
 - **New Plan page:** duration, objective and start date in; weekly load bars, projected FTP with uncertainty band, and session list out. Generate is one shot. "Send to Intervals" bulk-upserts Preburner-tagged events, and the workout text goes in the description so Intervals builds the structure.
-- **Today page:** an adaptation card with readiness and today's suggested change.
+- **Today page:** an adaptation card with readiness and today's suggested change. A "What happened?" card asks about skipped or cut-short sessions from the last three days.
 - **Coach tools:** `get_training_model`, `generate_plan`, `get_readiness`.
 - **Store:** `history` (compact daily series, not raw streams) and `trainingPlan`.
 

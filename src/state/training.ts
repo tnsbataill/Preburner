@@ -5,7 +5,8 @@ import { type AdaptConfig, type Adjustment, DEFAULT_ADAPT, type Readiness, adapt
 import { dayLoads } from '../training/fit';
 import { generatePlan, planEnd, sessionToWorkout } from '../training/generator';
 import type { ImportReport } from '../training/history/strava';
-import type { RideRecord, WellnessRecord } from '../training/history/types';
+import { applyMissedReason, applyRideIssue, worthAsking } from '../training/debrief';
+import type { MissedReason, RideIssue, RideRecord, WellnessRecord } from '../training/history/types';
 import { mergeRides } from '../training/history/intervals';
 import { loadsByDate, pmc } from '../training/model';
 import { Rng } from '../training/sim/rng';
@@ -44,6 +45,10 @@ export interface TrainingState {
   feedback: Record<string, Feedback>;
   /** rides whose RPE has already steered the plan */
   reviewedRides: string[];
+  /** "what happened?" for skipped sessions, keyed by plan session id */
+  missedReasons: Record<string, MissedReason>;
+  /** "what happened?" for rides that didn't go to plan, keyed by ride id */
+  rideIssues: Record<string, { issue: RideIssue; sessionId?: string }>;
   /** hide other (e.g. TrainerRoad) planned sessions inside the plan window */
   replaceExternal: boolean;
 }
@@ -56,6 +61,8 @@ export const INITIAL_TRAINING: TrainingState = {
   adjustments: [],
   feedback: {},
   reviewedRides: [],
+  missedReasons: {},
+  rideIssues: {},
   replaceExternal: true,
 };
 
@@ -64,16 +71,24 @@ export function historyRides(t: TrainingState): RideRecord[] {
   const merged = mergeRides(t.intervalsRides, t.stravaRides);
   const plan = t.plan;
   const byDate = new Map<DateKey, PlannedSession>();
-  for (const s of plan?.sessions ?? []) byDate.set(s.date, s);
+  const byId = new Map<string, PlannedSession>();
+  for (const s of plan?.sessions ?? []) {
+    byDate.set(s.date, s);
+    byId.set(s.id, s);
+  }
   return merged.map((r) => {
     const fb = t.feedback[r.id];
-    // A ride on a plan day executed that session: tag it so RPE steers the right progression.
-    const s = byDate.get(r.date);
-    const matches = s && Math.abs(s.durationMin - r.durationMin) <= Math.max(20, 0.5 * s.durationMin);
+    const issue = t.rideIssues?.[r.id];
+    // A ride on a plan day executed that session: tag it so RPE steers the
+    // right progression. A ride the athlete said was a cut-short session is
+    // tagged however short it was.
+    const s = (issue?.sessionId && byId.get(issue.sessionId)) || byDate.get(r.date);
+    const matches = s && (issue?.sessionId === s.id || Math.abs(s.durationMin - r.durationMin) <= Math.max(20, 0.5 * s.durationMin));
     return {
       ...r,
       rpe: fb?.rpe ?? r.rpe,
       feel: fb?.feel ?? r.feel,
+      ...(issue ? { issue: issue.issue, failed: issue.issue === 'too-hard' || undefined } : {}),
       ...(matches ? { kind: s.kind, level: s.level, plannedId: s.id } : {}),
     };
   });
@@ -95,6 +110,72 @@ export function applyFeedback(t: TrainingState, rideId: string, today: DateKey):
     reviewedRides: [...t.reviewedRides, rideId].slice(-200),
     adjustments: [...adjustments, ...t.adjustments].slice(0, 60),
     dirtyIds: t.appliedAt ? [...new Set([...t.dirtyIds, ...changed])] : t.dirtyIds,
+  };
+}
+
+export type DebriefItem =
+  | { type: 'missed'; session: PlannedSession }
+  | { type: 'short'; session: PlannedSession; ride: RideRecord };
+
+/**
+ * Sessions to ask "what happened?" about: quality or long sessions in the last
+ * three days that were skipped, or ridden at under 80% of the planned time.
+ */
+export function debriefQueue(t: TrainingState, today: DateKey): DebriefItem[] {
+  if (!t.plan) return [];
+  const rides = historyRides(t);
+  const out: DebriefItem[] = [];
+  for (const s of t.plan.sessions) {
+    if (s.date < addDays(today, -3) || s.date >= today || s.date < t.plan.request.start || !worthAsking(s)) continue;
+    const onDay = rides.filter((r) => r.date === s.date && r.durationMin > 0);
+    if (!onDay.length) {
+      if (!t.missedReasons?.[s.id]) out.push({ type: 'missed', session: s });
+      continue;
+    }
+    const ride = onDay.reduce((a, b) => (b.durationMin > a.durationMin ? b : a));
+    if (ride.durationMin < 0.8 * s.durationMin && !t.rideIssues?.[ride.id]) out.push({ type: 'short', session: s, ride });
+  }
+  return out.slice(-2);
+}
+
+/** Mark sessions changed since they were sent to Intervals. */
+function dirty(t: TrainingState, before: PlannedSession[], after: PlannedSession[]): string[] {
+  if (!t.appliedAt) return t.dirtyIds;
+  const prev = new Map(before.map((s) => [s.id, JSON.stringify(s.steps)]));
+  return [...new Set([...t.dirtyIds, ...after.filter((s) => prev.get(s.id) !== JSON.stringify(s.steps)).map((s) => s.id)])];
+}
+
+/** The athlete says why they skipped a session. Applies right away. */
+export function answerMissed(t: TrainingState, sessionId: string, reason: MissedReason, today: DateKey): Partial<TrainingState> {
+  const missedReasons = { ...t.missedReasons, [sessionId]: reason };
+  const missed = t.plan?.sessions.find((s) => s.id === sessionId);
+  // A changed answer is recorded but not applied twice.
+  if (!t.plan || !missed || t.missedReasons?.[sessionId]) return { missedReasons };
+  const res = applyMissedReason(t.plan.sessions, missed, reason, today, t.adjustments, t.plan.intensityScale);
+  return {
+    missedReasons,
+    plan: { ...t.plan, sessions: res.sessions },
+    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today })), ...t.adjustments].slice(0, 60),
+    dirtyIds: dirty(t, t.plan.sessions, res.sessions),
+  };
+}
+
+/** The athlete says why a ride didn't go to plan. Applies right away. */
+export function answerRideIssue(t: TrainingState, rideId: string, issue: RideIssue, today: DateKey, sessionId?: string): Partial<TrainingState> {
+  const rideIssues = { ...t.rideIssues, [rideId]: { issue, sessionId } };
+  if (!t.plan || t.rideIssues?.[rideId]) return { rideIssues };
+  const next = { ...t, rideIssues };
+  const rides = historyRides(next);
+  const ride = rides.find((r) => r.id === rideId);
+  if (!ride) return { rideIssues };
+  const res = applyRideIssue(t.plan.sessions, rides, ride, issue, today, t.reviewedRides.includes(rideId), t.plan.intensityScale);
+  return {
+    rideIssues,
+    plan: { ...t.plan, sessions: res.sessions, intensityScale: res.scales },
+    // Its RPE (now or later) has been accounted for by this answer.
+    reviewedRides: [...new Set([...t.reviewedRides, rideId])].slice(-200),
+    adjustments: [...res.adjustments.map((a) => ({ ...a, date: today })), ...t.adjustments].slice(0, 60),
+    dirtyIds: dirty(t, t.plan.sessions, res.sessions),
   };
 }
 
@@ -122,7 +203,7 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   // Rides whose RPE was already applied (answered in-app) don't count twice.
   const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade').map((a) => a.date);
   const working = mode === 'intervals' ? ftp : (t.ftp ?? ftp);
-  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades }, cfg);
+  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {} }, cfg);
   const ftpAdj = out.adjustments.filter((a) => a.action === 'ftp').at(-1);
   // Intervals resolves %FTP against its own FTP: suggest, don't silently diverge.
   const ftpPatch: Partial<TrainingState> =

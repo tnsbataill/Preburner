@@ -1,7 +1,9 @@
 import { addDays, diffDays, weekdayOf } from '../../engine/time';
 import type { RideRecord } from '../history/types';
 import type { Weekday } from '../../engine/types';
-import { type AdaptConfig, DEFAULT_ADAPT, adaptDay } from '../adapt';
+import { type AdaptConfig, type Adjustment, DEFAULT_ADAPT, adaptDay } from '../adapt';
+import { applyMissedReason, applyRideIssue, worthAsking } from '../debrief';
+import type { MissedReason } from '../history/types';
 import type { FitMode } from '../fit';
 import { DEFAULT_GENOME, generatePlan } from '../generator';
 import { dayLoads } from '../fit';
@@ -24,6 +26,8 @@ export interface Strategy {
   build: 'static' | 'optimize';
   mode: FitMode;
   adapt?: Partial<AdaptConfig> | false;
+  /** athlete answers "what happened?"; misreport = share of tired skips reported as no time */
+  debrief?: { misreport: number };
 }
 
 export const STRATEGIES: Record<string, Strategy> = {
@@ -32,6 +36,7 @@ export const STRATEGIES: Record<string, Strategy> = {
   'opt-prior': { name: 'opt-prior', build: 'optimize', mode: 'prior', adapt: false },
   'opt-core': { name: 'opt-core', build: 'optimize', mode: 'core', adapt: false },
   'opt-core+adapt': { name: 'opt-core+adapt', build: 'optimize', mode: 'core', adapt: {} },
+  'opt-core+adapt+debrief': { name: 'opt-core+adapt+debrief', build: 'optimize', mode: 'core', adapt: {}, debrief: { misreport: 0 } },
   'opt-core+adapt-norpe': { name: 'opt-core+adapt-norpe', build: 'optimize', mode: 'core', adapt: { useRpe: false } },
 };
 
@@ -113,13 +118,16 @@ export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, se
   let adjustments = 0;
   let lastReplan = '';
   const downgrades: string[] = [];
+  const missedReasons: Record<string, MissedReason> = {};
+  const history: Adjustment[] = [];
   for (let day = start; day <= end; day = addDays(day, 1)) {
     if (cfg) {
       const loads = loadsByDate(dayLoads(a.rides.filter((r) => r.date >= addDays(day, -120))));
       const series = pmc(addDays(day, -120), loads, 120);
       const last = series.at(-1)!;
-      const out = adaptDay({ plan, today: day, rides: a.rides, wellness: a.wellness, ftpSet: a.ftpSet, tsb: last.ctl - last.atl, recentDowngrades: downgrades }, cfg);
+      const out = adaptDay({ plan, today: day, rides: a.rides, wellness: a.wellness, ftpSet: a.ftpSet, tsb: last.ctl - last.atl, recentDowngrades: downgrades, missedReasons }, cfg);
       for (const adj of out.adjustments) if (adj.action === 'downgrade') downgrades.push(day);
+      history.unshift(...out.adjustments);
       plan = out.plan;
       a.ftpSet = out.ftpSet;
       adjustments += out.adjustments.length;
@@ -138,6 +146,28 @@ export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, se
     if (simLog) {
       const t = a.truth.at(-1)!;
       simLog(`  ${day} ${s ? `${s.kind} L${s.level} ${s.tss}tss` : 'rest'} ${ride ? `rode rpe ${ride.rpe} feel ${ride.feel}${ride.failed ? ' FAILED' : ''}` : s ? 'SKIPPED' : ''} | true ${t.ftp.toFixed(0)} rested ${t.rested.toFixed(0)} strain ${t.strain.toFixed(2)}${t.ill ? ' ILL' : ''}${t.stressed ? ' STRESS' : ''} ftpSet ${a.ftpSet}`);
+    }
+    // That evening the athlete answers "what happened?".
+    if (cfg && strat.debrief && s && worthAsking(s)) {
+      const tomorrow = addDays(day, 1);
+      let res: { sessions: TrainingPlan['sessions']; adjustments: Adjustment[] } | undefined;
+      if (!ride && a.lastSkip) {
+        const reason: MissedReason = a.lastSkip === 'tired' && a.answerDraw < strat.debrief.misreport ? 'time' : a.lastSkip;
+        missedReasons[s.id] = reason;
+        simLog?.(`${day} answered: skipped ${s.kind} (${reason})`);
+        res = applyMissedReason(plan.sessions, s, reason, tomorrow, history, plan.intensityScale);
+      } else if (ride?.failed && a.lastUnwell) {
+        // Failed while stressed or getting ill: not a sign the targets are wrong.
+        ride.failed = false;
+        ride.issue = 'unwell';
+        simLog?.(`${day} answered: ${s.kind} failed while unwell`);
+        res = applyRideIssue(plan.sessions, a.rides, ride, 'unwell', tomorrow, false, plan.intensityScale);
+      } else if (ride?.failed) ride.issue = 'too-hard';
+      if (res) {
+        plan = { ...plan, sessions: res.sessions };
+        history.unshift(...res.adjustments);
+        adjustments += res.adjustments.length;
+      }
     }
     // Athletes update their FTP after a test whatever the strategy.
     if (ride?.isTest && ride.best20) a.ftpSet = Math.round(ride.best20 * 0.95);

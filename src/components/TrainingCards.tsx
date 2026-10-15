@@ -1,8 +1,10 @@
-import { Activity, HeartPulse, MessageCircleQuestion, Sparkles } from 'lucide-react';
-import { useMemo } from 'react';
+import { Activity, CircleHelp, HeartPulse, MessageCircleQuestion, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { addDays, formatDate, formatDuration } from '../engine/time';
 import { useApp } from '../state/store';
-import { historyRides } from '../state/training';
+import { debriefQueue, historyRides } from '../state/training';
+import { ISSUE_LABEL, MISSED_LABEL } from '../training/debrief';
+import type { MissedReason, RideIssue } from '../training/history/types';
 import { useToday } from '../state/usePlan';
 import type { Adjustment } from '../training/adapt';
 import { Card, Chip, SectionTitle, cx } from '../ui/primitives';
@@ -158,6 +160,7 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
                 <span>easy</span>
                 <span>max</span>
               </div>
+              {r.plannedId && r.kind && <OffPlan rideId={r.id} sessionId={r.plannedId} answered={training.rideIssues?.[r.id]?.issue} />}
               <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">How you felt</div>
               <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={`Feel for ride on ${r.date}`}>
                 {FEEL.map((f) => (
@@ -176,6 +179,112 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
         })}
       </div>
       {!compact && <p className="mt-4 text-xs text-muted">Sessions that feel easier than usual move your progression up; harder ones hold it or step back. Feeling poor two rides running eases the next hard day.</p>}
+    </Card>
+  );
+}
+
+const MISSED_ORDER: MissedReason[] = ['time', 'travel', 'equipment', 'tired', 'sick', 'injured'];
+const ISSUE_ORDER: RideIssue[] = ['time', 'equipment', 'too-hard', 'unwell'];
+
+function Choices<T extends string>({ options, labels, value, onPick, label }: { options: T[]; labels: Record<T, string>; value?: T; onPick: (v: T) => void; label: string }) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o}
+          aria-pressed={value === o}
+          onClick={() => onPick(o)}
+          className={cx('rounded-full border px-3 py-1 text-xs font-medium transition', value === o ? 'border-ember bg-ember/15 text-ember' : 'border-line hover:bg-raised')}
+        >
+          {labels[o]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Didn't go to plan?" under a rated ride: the same question a cut-short ride gets. */
+function OffPlan({ rideId, sessionId, answered }: { rideId: string; sessionId: string; answered?: RideIssue }) {
+  const answer = useApp((s) => s.answerRideIssue);
+  const [open, setOpen] = useState(false);
+  if (answered) return <div className="mt-2 text-xs text-muted">Didn't go to plan · {ISSUE_LABEL[answered]}</div>;
+  if (!open)
+    return (
+      <button onClick={() => setOpen(true)} className="mt-2 text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+        Didn't go to plan?
+      </button>
+    );
+  return <Choices options={ISSUE_ORDER} labels={ISSUE_LABEL} onPick={(v) => answer(rideId, v, sessionId)} label={`What happened on ride ${rideId}`} />;
+}
+
+const MISSED_HELP: Record<MissedReason, string> = {
+  time: 'The session moves to a free day this week.',
+  travel: 'The session moves to a free day this week.',
+  equipment: 'The session moves to a free day this week.',
+  tired: "The work isn't stacked on later; your next hard day is eased.",
+  sick: 'Easy spins for three days, then you ease back in.',
+  injured: 'Hard sessions this week become easy spins.',
+};
+
+/**
+ * "What happened?" for skipped or cut-short sessions. Why matters: a busy day
+ * moves the work, being run down eases what's next, and only "couldn't hold
+ * the targets" counts against the intensity.
+ */
+export function DebriefPrompt() {
+  const training = useApp((s) => s.training);
+  const answerMissed = useApp((s) => s.answerMissed);
+  const answerIssue = useApp((s) => s.answerRideIssue);
+  const today = useToday();
+  const items = useMemo(() => debriefQueue(training, today), [training, today]);
+  const [last, setLast] = useState<string>();
+  if (!items.length && !last) return null;
+  return (
+    <Card className="p-5" data-testid="debrief-prompt">
+      <SectionTitle>
+        <span className="inline-flex items-center gap-1.5">
+          <CircleHelp size={14} /> What happened?
+        </span>
+      </SectionTitle>
+      <div className="space-y-5">
+        {items.map((it) => (
+          <div key={it.session.id}>
+            <div className="text-sm">
+              <span className="font-medium">{it.session.title}</span>
+              <span className="text-muted">
+                {' '}
+                · {formatDate(it.session.date, { weekday: true })} · {it.type === 'missed' ? 'skipped' : `${formatDuration(it.ride.durationMin)} of ${formatDuration(it.session.durationMin)}`}
+              </span>
+            </div>
+            {it.type === 'missed' ? (
+              <Choices
+                options={MISSED_ORDER}
+                labels={MISSED_LABEL}
+                label={`Why ${it.session.title} was skipped`}
+                onPick={(v) => {
+                  answerMissed(it.session.id, v);
+                  setLast(MISSED_HELP[v]);
+                }}
+              />
+            ) : (
+              <Choices
+                options={ISSUE_ORDER}
+                labels={ISSUE_LABEL}
+                label={`Why ${it.session.title} was cut short`}
+                onPick={(v) => {
+                  answerIssue(it.ride.id, v, it.session.id);
+                  setLast(v === 'too-hard' ? 'Counted as a missed target: the next one steps back.' : v === 'unwell' ? 'Your next hard day is eased.' : 'No change to your plan.');
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      {last && (
+        <p className="mt-3 text-xs text-muted" role="status">
+          {last}
+        </p>
+      )}
     </Card>
   );
 }

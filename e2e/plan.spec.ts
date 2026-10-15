@@ -111,3 +111,27 @@ test('a history file (e.g. built from the Strava connector) drives the model and
   await expect(page.getByTestId('plan-summary')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('plan-summary')).toContainText('80% range');
 });
+
+test('"what happened?" after skipped or cut-short sessions changes the plan', async ({ page }) => {
+  // Plan made on a Wednesday (starts the next Monday), then three weeks later
+  // the demo athlete's real riding has missed or cut short some sessions.
+  await page.clock.install({ time: new Date('2026-10-14T09:00:00') });
+  await onboardWithDemo(page);
+  await generate(page);
+  await page.clock.setSystemTime(new Date('2026-11-05T09:00:00'));
+  await page.reload();
+  await page.goto('/#/today');
+  const card = page.getByTestId('debrief-prompt');
+  await expect(card).toBeVisible();
+  // The demo athlete didn't ride Tuesday's sweet spot.
+  await expect(card).toContainText('Sweet spot: 2x20 sweet spot · Tue, Nov 3 · skipped');
+  const label = 'Why Sweet spot: 2x20 sweet spot was skipped';
+  await card.getByRole('group', { name: label }).getByRole('button', { name: 'Sick' }).click();
+  await expect(card.getByRole('status')).toContainText('Easy spins for three days');
+  // The plan changed: hard days in the next three became easy spins.
+  await expect(page.getByTestId('readiness-card')).toContainText(/Getting over illness: easy spin instead of/);
+  // Answered: it isn't asked again, after a reload either.
+  await expect(card.getByRole('group', { name: label! })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('group', { name: label! })).toHaveCount(0);
+});

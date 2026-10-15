@@ -1,7 +1,7 @@
 import { ChevronDown, CloudUpload, FileArchive, Gauge, Loader2, RefreshCw, Sparkles, Trash2, TrendingUp } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { navigate } from '../App';
-import { AdjustmentRow, FeedbackPrompt, ReadinessCard } from '../components/TrainingCards';
+import { AdjustmentRow, DebriefPrompt, FeedbackPrompt, ReadinessCard } from '../components/TrainingCards';
 import { addDays, diffDays, formatDate, formatDuration, weekStartOf, weekdayOf, weekdayShort } from '../engine/time';
 import { useApp } from '../state/store';
 import { trainingSnapshot } from '../state/store';
@@ -421,6 +421,7 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ReadinessCard />
+        <DebriefPrompt />
         <FeedbackPrompt />
       </div>
 

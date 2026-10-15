@@ -59,6 +59,13 @@ export class SimAthlete {
     return new Rng(h >>> 0);
   }
 
+  /** why the last planned session was skipped (what the athlete would answer) */
+  lastSkip?: 'time' | 'tired' | 'sick';
+  /** the athlete was under life stress or ill on the last day */
+  lastUnwell = false;
+  /** uniform draw for how truthfully the athlete answers (separate stream) */
+  answerDraw = 0;
+
   /** Live one day. Returns the ride record if they rode. */
   live(session?: SimSession, observe = true): RideRecord | undefined {
     const date = this.day;
@@ -69,7 +76,14 @@ export class SimAthlete {
     }
     let ride: RideRecord | undefined;
     let load = { low: 0, mid: 0, high: 0 };
-    const skip = !session || this.s.illDays > 0 || this.dayRng(2).chance(this.p.skipRate + 0.05 * this.s.strain);
+    // One draw decides the skip and, for the questionnaire, why: below the
+    // base rate it's life (time), above it the extra skips strain causes.
+    const u = this.dayRng(2).next();
+    const skip = !session || this.s.illDays > 0 || u < this.p.skipRate + 0.05 * this.s.strain;
+    this.lastSkip = session && skip ? (this.s.illDays > 0 ? 'sick' : u < this.p.skipRate ? 'time' : 'tired') : undefined;
+    // Riding through a life-stress patch or the day before getting sick.
+    this.lastUnwell = this.s.stressDays > 0 || this.s.illDays > 0;
+    this.answerDraw = this.dayRng(7).next();
     if (session && !skip) {
       const ex = execute(session.steps, this.ftpSet, session.labels, this.s, this.p, this.dayRng(3));
       load = ex.trueLoad;

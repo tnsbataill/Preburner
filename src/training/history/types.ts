@@ -24,6 +24,8 @@ export interface RideRecord {
   isTest?: boolean;
   /** structured session where targets could not be held */
   failed?: boolean;
+  /** why a planned session didn't go to plan, as the athlete reported it */
+  issue?: RideIssue;
   /** session RPE the athlete reported, 1-10 */
   rpe?: number;
   /** how the athlete felt, Intervals scale: 1 strong, 2 good, 3 normal, 4 poor, 5 weak */
@@ -35,6 +37,11 @@ export interface RideRecord {
   plannedId?: string;
   source: 'strava' | 'intervals' | 'sim';
 }
+
+/** Why a planned session was skipped. */
+export type MissedReason = 'time' | 'travel' | 'equipment' | 'tired' | 'sick' | 'injured';
+/** Why a ridden session didn't go to plan (cut short or targets missed). */
+export type RideIssue = 'time' | 'equipment' | 'too-hard' | 'unwell';
 
 export interface WellnessRecord {
   date: DateKey;

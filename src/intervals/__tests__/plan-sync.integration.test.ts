@@ -141,6 +141,25 @@ describe('training plan <-> Intervals.icu', () => {
     expect(fake.activityPuts.at(-1)).toEqual({ id: ride.id.slice(4), body: { icu_rpe: 7, feel: 2 } });
   });
 
+  it('"what happened?" answers reach the Intervals calendar on the next update', async () => {
+    const { isQuality } = await import('../../training/adapt');
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(-10), optimize: false });
+    await useApp.getState().applyTrainingPlan();
+    const plan = useApp.getState().training.plan!;
+    const missed = plan.sessions.filter((s) => s.date < today)[0];
+    const upcoming = plan.sessions.filter((s) => isQuality(s) && s.date >= today && s.date < d(7));
+    expect(upcoming.length).toBeGreaterThan(0);
+    useApp.getState().answerMissed(missed.id, 'injured');
+    const t = useApp.getState().training;
+    expect(t.dirtyIds).toEqual(expect.arrayContaining(upcoming.map((s) => s.id)));
+    await useApp.getState().applyTrainingPlan();
+    for (const s of upcoming) {
+      const e = fake.planEvents().find((x) => x.external_id === `preburner-plan-${s.id}`)!;
+      expect(e.name).toMatch(/recovery/i);
+    }
+    expect(useApp.getState().training.dirtyIds).toEqual([]);
+  });
+
   it('discarding removes the future plan events and keeps everything else', async () => {
     await useApp.getState().discardTrainingPlan();
     expect(fake.planEvents().filter((e) => e.start_date_local.slice(0, 10) >= today)).toHaveLength(0);

@@ -1,6 +1,6 @@
 import { addDays, diffDays } from '../engine/time';
 import type { DateKey } from '../engine/types';
-import type { RideRecord, WellnessRecord } from './history/types';
+import type { MissedReason, RideRecord, WellnessRecord } from './history/types';
 import { MAX_LEVEL, buildSession, expandBlocks, expectedRpe, levelThatFits, stepMetrics, toIntervalsText } from './library';
 import type { HardKind, PlannedSession, SessionKind, TrainingPlan } from './types';
 
@@ -110,6 +110,9 @@ export interface Adjustment {
   newDate?: DateKey;
   newFtp?: number;
   reason: string;
+  /** for catch-up moves: the missed session, and what the target day held before */
+  movedFrom?: string;
+  replaced?: PlannedSession;
 }
 
 export interface AdaptInput {
@@ -121,6 +124,8 @@ export interface AdaptInput {
   reviewed?: string[];
   /** dates of recent readiness downgrades (to cap them) */
   recentDowngrades?: DateKey[];
+  /** why planned sessions were missed, keyed by session id */
+  missedReasons?: Record<string, MissedReason>;
   rides: RideRecord[];
   wellness: WellnessRecord[];
   ftpSet: number;
@@ -157,7 +162,30 @@ export function rebuild(s: PlannedSession, kind: SessionKind, minutes: number, l
   };
 }
 
-const isQuality = (s: PlannedSession) => s.hard && s.kind !== 'ftptest';
+export const isQuality = (s: PlannedSession) => s.hard && s.kind !== 'ftptest';
+
+/** Missed for reasons that say nothing about the body: the work still belongs in the week. */
+export const isLogistics = (r: MissedReason | undefined) => r === undefined || r === 'time' || r === 'travel' || r === 'equipment';
+
+/**
+ * Fit a missed quality session into the first easy day of the next three that
+ * keeps hard days apart. The move remembers what the day held so a later
+ * answer ("I was sick") can undo it.
+ */
+export function catchUp(sessions: PlannedSession[], missed: PlannedSession, today: DateKey, scales: Partial<Record<HardKind, number>> = {}): { sessions: PlannedSession[]; adjustment?: Adjustment } {
+  // The missed session itself didn't happen, so it doesn't count as a hard day.
+  const isHardOn = (d: DateKey) => sessions.some((s) => s.date === d && isQuality(s) && s.id !== missed.id);
+  const target = [0, 1, 2]
+    .map((o) => addDays(today, o))
+    .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && !sessions.some((s) => s.date === d && (s.kind === 'ftptest' || s.kind === 'openers')));
+  const easy = target && sessions.find((s) => s.date === target && !s.hard);
+  if (!easy) return { sessions };
+  const moved = { ...rebuild(easy, missed.kind, Math.max(easy.durationMin, missed.durationMin), missed.level, scales[missed.kind as HardKind] ?? 1), id: easy.id };
+  return {
+    sessions: sessions.map((s) => (s === easy ? moved : s)),
+    adjustment: { date: target!, action: 'move', sessionId: easy.id, movedFrom: missed.id, replaced: easy, reason: `Moved missed ${missed.title} from ${missed.date}` },
+  };
+}
 
 /**
  * What a session of this kind normally feels like *to this athlete*. People
@@ -167,7 +195,7 @@ const isQuality = (s: PlannedSession) => s.hard && s.kind !== 'ftptest';
  */
 export function personalRpe(rides: RideRecord[], kind: SessionKind, level: number, before: DateKey): number {
   const own = rides
-    .filter((r) => r.kind === kind && r.rpe !== undefined && !r.failed && r.date < before && r.date >= addDays(before, -180))
+    .filter((r) => r.kind === kind && r.rpe !== undefined && !r.failed && !r.issue && r.date < before && r.date >= addDays(before, -180))
     .map((r) => r.rpe! - expectedRpe(kind, r.level ?? 1));
   if (own.length < 3) return expectedRpe(kind, level);
   const sorted = [...own].sort((a, b) => a - b);
@@ -208,7 +236,7 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   //     keep feeling clearly easier (or harder) than they should, nudge FTP.
   if (cfg.useRpe && cfg.rpeFtp && !adjustments.some((a) => a.action === 'ftp')) {
     const atThisFtp = input.rides.filter(
-      (r) => r.date >= addDays(today, -28) && r.ftpSet === ftpSet && r.rpe !== undefined && r.kind && ['sweetspot', 'threshold', 'overunder', 'vo2'].includes(r.kind),
+      (r) => r.date >= addDays(today, -28) && r.ftpSet === ftpSet && r.rpe !== undefined && (!r.issue || r.issue === 'too-hard') && r.kind && ['sweetspot', 'threshold', 'overunder', 'vo2'].includes(r.kind),
     );
     if (atThisFtp.length >= 4) {
       const diffs = atThisFtp.slice(-4).map((r) => r.rpe! - personalRpe(input.rides, r.kind as SessionKind, r.level ?? 1, r.date));
@@ -243,16 +271,12 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   const isHardOn = (d: DateKey) => sessions.some((s) => s.date === d && isQuality(s));
   const yesterday = addDays(today, -1);
   const missedHard = sessions.find((s) => s.date === yesterday && isQuality(s) && !ridesByDate.get(yesterday)?.length);
-  if (missedHard && !replan) {
-    // Move it to the first easy day in the next 3 that keeps hard days apart.
-    const target = [0, 1, 2]
-      .map((o) => addDays(today, o))
-      .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && !sessions.some((s) => s.date === d && (s.kind === 'ftptest' || s.kind === 'openers')));
-    const easy = target && sessions.find((s) => s.date === target && !s.hard);
-    if (easy) {
-      sessions = sessions.map((s) => (s === easy ? { ...rebuild(easy, missedHard.kind, Math.max(easy.durationMin, missedHard.durationMin), missedHard.level), id: easy.id } : s));
-      adjustments.push({ date: target!, action: 'move', sessionId: easy.id, reason: `Moved missed ${missedHard.title} from yesterday` });
-    }
+  // Until the athlete says why, assume life got in the way and catch the work
+  // up. An answer is handled where it's given (see debrief.ts).
+  if (missedHard && !replan && input.missedReasons?.[missedHard.id] === undefined) {
+    const res = catchUp(sessions, missedHard, today, input.plan.intensityScale);
+    sessions = res.sessions;
+    if (res.adjustment) adjustments.push(res.adjustment);
   }
 
   // 5. Today's hard session vs readiness.
@@ -297,12 +321,16 @@ export function applyRpe(
   cfg: AdaptConfig = DEFAULT_ADAPT,
   ftpJustRaised = false,
   scalesIn: Partial<Record<HardKind, number>> = {},
+  opts: { failureOnly?: boolean } = {},
 ): { sessions: PlannedSession[]; adjustments: Adjustment[]; scales: Partial<Record<HardKind, number>> } {
   let sessions = sessionsIn;
   const scales = { ...scalesIn };
   const adjustments: Adjustment[] = [];
   const kind = r.kind as SessionKind;
   if (!kind || !(kind in MAX_LEVEL) || (r.rpe === undefined && !r.failed)) return { sessions, adjustments, scales };
+  // Cut short for time, kit trouble, or riding while unwell: the RPE says
+  // nothing about whether the targets fit.
+  if (r.issue && r.issue !== 'too-hard') return { sessions, adjustments, scales };
   const diff = (r.rpe ?? 10) - personalRpe(rides, kind, r.level ?? 1, r.date);
   const feltPoor = (r.feel ?? 0) >= 4;
   const hk = kind as HardKind;
@@ -331,7 +359,14 @@ export function applyRpe(
     adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} targets lowered to ${Math.round(next * 100)}% of the standard %FTP: you couldn't hold them, so your power over these durations is below what FTP predicts` });
     return { sessions, adjustments, scales };
   }
-  if (r.failed || (diff >= 2 * cfg.rpeHarder && !feltPoor)) {
+  if (r.failed && opts.failureOnly) {
+    // RPE for this ride already moved the plan: make sure it stepped back,
+    // without stepping back a second time.
+    if (upcoming[0].level > done - 1) {
+      setLevel(upcoming[0], done - 1);
+      adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} couldn't hold the targets: stepping back a level` });
+    }
+  } else if (r.failed || (diff >= 2 * cfg.rpeHarder && !feltPoor)) {
     setLevel(upcoming[0], done - 1);
     for (const u of upcoming.slice(1)) setLevel(u, u.level - 1);
     adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} ${r.failed ? "couldn't hold the targets" : `felt much harder than usual (RPE ${r.rpe})`}: stepping back a level` });
