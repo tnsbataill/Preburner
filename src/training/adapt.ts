@@ -119,6 +119,8 @@ export interface AdaptInput {
   since?: DateKey;
   /** ride ids whose RPE has already been applied */
   reviewed?: string[];
+  /** dates of recent readiness downgrades (to cap them) */
+  recentDowngrades?: DateKey[];
   rides: RideRecord[];
   wellness: WellnessRecord[];
   ftpSet: number;
@@ -134,8 +136,8 @@ export interface AdaptOutput {
   replan: boolean;
 }
 
-export function rebuild(s: PlannedSession, kind: SessionKind, minutes: number, level: number): PlannedSession {
-  const b = buildSession(kind, minutes, level);
+export function rebuild(s: PlannedSession, kind: SessionKind, minutes: number, level: number, scale = 1): PlannedSession {
+  const b = buildSession(kind, minutes, level, scale);
   const steps = expandBlocks(b.blocks);
   const m = stepMetrics(steps);
   return {
@@ -190,14 +192,16 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
       adjustments.push({ date: today, action: 'ftp', newFtp: ftpSet, reason: `${r.isTest ? 'Test' : 'Best 20-min effort'} puts FTP at ${ftpSet} W` });
     }
   }
-  // 2. Repeated failures on hard sessions: zones are probably set too high.
-  const fails = input.rides.filter((r) => r.date >= addDays(today, -14) && r.failed).length;
-  if (fails >= 2 && rd.level === 'green' && !adjustments.some((a) => a.action === 'ftp')) {
-    const lastFail = input.rides.filter((r) => r.failed).at(-1);
-    if (lastFail && lastFail.date >= addDays(today, -2)) {
-      ftpSet = Math.round(ftpSet * 0.97);
-      adjustments.push({ date: today, action: 'ftp', newFtp: ftpSet, reason: 'Two hard sessions failed in two weeks while fresh: FTP lowered 3%' });
-    }
+  // 2. Repeated failures at threshold-type work (not VO2: missing those says
+  //    more about short-power profile or fatigue) at the *current* FTP while
+  //    fresh: zones are probably set too high. Counting only rides at the
+  //    current FTP means one bad patch can't lower it twice.
+  const thresholdFails = input.rides.filter(
+    (r) => r.date >= addDays(today, -14) && r.date < today && r.failed && r.ftpSet === ftpSet && ['sweetspot', 'threshold', 'overunder', 'tempo'].includes(r.kind ?? ''),
+  );
+  if (thresholdFails.length >= 2 && rd.level === 'green' && !adjustments.some((a) => a.action === 'ftp')) {
+    ftpSet = Math.round(ftpSet * 0.97);
+    adjustments.push({ date: today, action: 'ftp', newFtp: ftpSet, reason: `${thresholdFails.length} threshold sessions failed in two weeks while fresh: FTP lowered 3%` });
   }
 
   // 2b. Zones vs perception: if quality sessions ridden at the current FTP
@@ -222,10 +226,12 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   // 3. How did it feel? Reported RPE vs what the session normally feels like
   //    steers the level of upcoming sessions of the same kind.
   const since = input.since ?? addDays(today, -1);
+  let scales = input.plan.intensityScale ?? {};
   if (cfg.useRpe && cfg.rpeLevels) {
     for (const r of input.rides.filter((x) => x.date >= since && x.date < today && x.kind && (x.rpe !== undefined || x.failed) && !input.reviewed?.includes(x.id))) {
-      const res = applyRpe(sessions, input.rides, r, today, cfg, adjustments.some((a) => a.action === 'ftp'));
+      const res = applyRpe(sessions, input.rides, r, today, cfg, adjustments.some((a) => a.action === 'ftp'), scales);
       sessions = res.sessions;
+      scales = res.scales;
       adjustments.push(...res.adjustments);
     }
   }
@@ -251,8 +257,11 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
 
   // 5. Today's hard session vs readiness.
   const todays = sessions.filter((s) => s.date === today && isQuality(s));
+  // A long HRV dip is more likely a shifted baseline (life, season) than
+  // acute fatigue: after 2 swaps in a week, ease sessions instead of cancelling.
+  const recentSwaps = input.recentDowngrades?.filter((d) => d >= addDays(today, -6) && d < today).length ?? 0;
   for (const s of todays) {
-    if (rd.level === 'red') {
+    if (rd.level === 'red' && recentSwaps < 2) {
       const replacement = rebuild(s, 'recovery', Math.min(60, Math.max(30, s.durationMin * 0.6)), 1);
       sessions = sessions.map((x) => (x === s ? replacement : x));
       adjustments.push({ date: today, action: 'downgrade', sessionId: s.id, reason: `Readiness is low (${rd.reasons.join('; ')}): easy spin instead of ${s.title}` });
@@ -262,17 +271,17 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
         .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && sessions.some((x) => x.date === d && x.kind === 'endurance'));
       if (later) {
         const easy = sessions.find((x) => x.date === later && x.kind === 'endurance')!;
-        sessions = sessions.map((x) => (x === easy ? { ...rebuild(easy, s.kind, Math.max(easy.durationMin, s.durationMin), Math.max(1, s.level - 1)), id: easy.id } : x));
+        sessions = sessions.map((x) => (x === easy ? { ...rebuild(easy, s.kind, Math.max(easy.durationMin, s.durationMin), Math.max(1, s.level - 1), scales[s.kind as HardKind] ?? 1), id: easy.id } : x));
         adjustments.push({ date: later, action: 'move', sessionId: easy.id, reason: `${s.title} moved here from ${today}` });
       }
-    } else if (rd.level === 'amber' && s.level > 1) {
-      const reduced = rebuild(s, s.kind as HardKind, s.durationMin, s.level - 1);
+    } else if (rd.level !== 'green' && s.level > 1) {
+      const reduced = rebuild(s, s.kind as HardKind, s.durationMin, s.level - 1, scales[s.kind as HardKind] ?? 1);
       sessions = sessions.map((x) => (x === s ? reduced : x));
       adjustments.push({ date: today, action: 'reduce', sessionId: s.id, reason: `${rd.reasons.join('; ')}: one level easier today` });
     }
   }
 
-  return { plan: { ...input.plan, sessions }, ftpSet, readiness: rd, adjustments, replan };
+  return { plan: { ...input.plan, sessions, intensityScale: scales }, ftpSet, readiness: rd, adjustments, replan };
 }
 
 /**
@@ -287,25 +296,41 @@ export function applyRpe(
   today: DateKey,
   cfg: AdaptConfig = DEFAULT_ADAPT,
   ftpJustRaised = false,
-): { sessions: PlannedSession[]; adjustments: Adjustment[] } {
+  scalesIn: Partial<Record<HardKind, number>> = {},
+): { sessions: PlannedSession[]; adjustments: Adjustment[]; scales: Partial<Record<HardKind, number>> } {
   let sessions = sessionsIn;
+  const scales = { ...scalesIn };
   const adjustments: Adjustment[] = [];
   const kind = r.kind as SessionKind;
-  if (!kind || !(kind in MAX_LEVEL) || (r.rpe === undefined && !r.failed)) return { sessions, adjustments };
+  if (!kind || !(kind in MAX_LEVEL) || (r.rpe === undefined && !r.failed)) return { sessions, adjustments, scales };
   const diff = (r.rpe ?? 10) - personalRpe(rides, kind, r.level ?? 1, r.date);
   const feltPoor = (r.feel ?? 0) >= 4;
   const hk = kind as HardKind;
   const upcoming = sessions.filter((x) => x.kind === kind && x.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
-  if (!upcoming.length) return { sessions, adjustments };
+  if (!upcoming.length) return { sessions, adjustments, scales };
+  const scale = scales[hk] ?? 1;
   const clampTo = (u: PlannedSession, lv: number) => {
     const planned = u.plannedLevel ?? u.level;
     return Math.max(1, planned - 2, Math.min(MAX_LEVEL[hk], planned + 2, lv));
   };
   const setLevel = (u: PlannedSession, lv: number) => {
     const fit = levelThatFits(hk, clampTo(u, lv), u.durationMin + 15);
-    if (fit && fit !== u.level) sessions = sessions.map((x) => (x.id === u.id ? { ...rebuild(u, hk, u.durationMin, fit), plannedLevel: u.plannedLevel ?? u.level } : x));
+    if (fit && fit !== u.level) sessions = sessions.map((x) => (x.id === u.id ? { ...rebuild(u, hk, u.durationMin, fit, scales[hk] ?? 1), plannedLevel: u.plannedLevel ?? u.level } : x));
+  };
+  const rescale = (next: number) => {
+    scales[hk] = next;
+    sessions = sessions.map((x) => (x.kind === kind && x.date >= today ? { ...rebuild(x, hk, x.durationMin, x.level, next), plannedLevel: x.plannedLevel ?? x.level } : x));
   };
   const done = r.level ?? upcoming[0].level;
+  // Failing the same kind again soon (or at an entry level) means the target
+  // intensity, not the volume, is wrong for this rider: lower the targets.
+  const recentFail = rides.some((x) => x.id !== r.id && x.kind === kind && x.failed && x.date < r.date && x.date >= addDays(r.date, -21));
+  if (r.failed && (recentFail || done <= 2) && scale > 0.88 + 1e-9) {
+    const next = Math.max(0.88, Math.round((scale - 0.03) * 100) / 100);
+    rescale(next);
+    adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} targets lowered to ${Math.round(next * 100)}% of the standard %FTP: you couldn't hold them, so your power over these durations is below what FTP predicts` });
+    return { sessions, adjustments, scales };
+  }
   if (r.failed || (diff >= 2 * cfg.rpeHarder && !feltPoor)) {
     setLevel(upcoming[0], done - 1);
     for (const u of upcoming.slice(1)) setLevel(u, u.level - 1);
@@ -317,10 +342,16 @@ export function applyRpe(
     }
   } else if (diff <= -cfg.rpeEasier && !r.failed && !ftpJustRaised) {
     // (An FTP raise already makes every session harder; don't double up.)
-    for (const u of upcoming) setLevel(u, u.level + 1);
-    adjustments.push({ date: today, action: 'progress', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} felt easy (RPE ${r.rpe}): moving your progression up a level` });
+    if (scale < 1) {
+      // Targets were lowered earlier and now feel easy: give some back first.
+      rescale(Math.min(1, Math.round((scale + 0.02) * 100) / 100));
+      adjustments.push({ date: today, action: 'progress', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} felt easy (RPE ${r.rpe}): targets back up to ${Math.round((scales[hk] ?? 1) * 100)}%` });
+    } else {
+      for (const u of upcoming) setLevel(u, u.level + 1);
+      adjustments.push({ date: today, action: 'progress', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} felt easy (RPE ${r.rpe}): moving your progression up a level` });
+    }
   }
-  return { sessions, adjustments };
+  return { sessions, adjustments, scales };
 }
 
 /** Days since the plan started. */

@@ -85,10 +85,10 @@ export function applyFeedback(t: TrainingState, rideId: string, today: DateKey):
   const rides = historyRides(t);
   const ride = rides.find((r) => r.id === rideId);
   if (!ride?.kind || ride.rpe === undefined) return undefined;
-  const { sessions, adjustments } = applyRpe(t.plan.sessions, rides, ride, today);
+  const { sessions, adjustments, scales } = applyRpe(t.plan.sessions, rides, ride, today, DEFAULT_ADAPT, false, t.plan.intensityScale);
   const changed = sessions.filter((s, i) => s !== t.plan!.sessions[i]).map((s) => s.id);
   return {
-    plan: { ...t.plan, sessions },
+    plan: { ...t.plan, sessions, intensityScale: scales },
     reviewedRides: [...t.reviewedRides, rideId].slice(-200),
     adjustments: [...adjustments, ...t.adjustments].slice(0, 60),
     dirtyIds: t.appliedAt ? [...new Set([...t.dirtyIds, ...changed])] : t.dirtyIds,
@@ -117,7 +117,8 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   if (today < plan.request.start || today > addDays(planEnd(plan), 1)) return { lastAdapt: today, readiness: readiness(t.wellness, today, tsb, cfg, rides) };
   const since = t.lastAdapt ? addDays(t.lastAdapt, 0) : addDays(today, -1);
   // Rides whose RPE was already applied (answered in-app) don't count twice.
-  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: t.ftp ?? ftp, tsb, reviewed: t.reviewedRides }, cfg);
+  const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade').map((a) => a.date);
+  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: t.ftp ?? ftp, tsb, reviewed: t.reviewedRides, recentDowngrades }, cfg);
   let next = out.plan;
   const adjustments = [...out.adjustments];
   if (out.replan) {

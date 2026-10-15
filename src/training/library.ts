@@ -210,7 +210,13 @@ export interface BuiltSession {
  * Build a session that fills `minutes`. Hard sessions get warmup + main set,
  * then aerobic filler before the cooldown when there's spare time.
  */
-export function buildSession(kind: SessionKind, minutes: number, level = 1): BuiltSession {
+/**
+ * Build a session that fills `minutes`. Hard sessions get warmup + main set,
+ * then aerobic filler before the cooldown when there's spare time. `scale`
+ * personalises the main-set targets (e.g. 0.94 = VO2 work 6% below the
+ * generic %FTP for a rider whose short-interval power is weaker than FTP predicts).
+ */
+export function buildSession(kind: SessionKind, minutes: number, level = 1, scale = 1): BuiltSession {
   const sec = Math.max(20, minutes) * 60;
   let blocks: Block[];
   let title = TITLE[kind];
@@ -241,7 +247,7 @@ export function buildSession(kind: SessionKind, minutes: number, level = 1): Bui
     }
     default: {
       const hk = kind as HardKind;
-      const main = mainSet(hk, level);
+      const main = scale === 1 ? mainSet(hk, level) : mainSet(hk, level).map((b) => ({ ...b, steps: b.steps.map((st) => (st.lo >= 0.76 ? { ...st, lo: st.lo * scale, hi: st.hi * scale } : st)) }));
       const used = blocksSeconds([WARMUP, ...main, COOLDOWN]);
       blocks = [WARMUP, ...main, ...(sec - used >= m(5) ? [z2(sec - used)] : []), COOLDOWN];
       title = `${TITLE[kind]}: ${levelNote(hk, level)}`;

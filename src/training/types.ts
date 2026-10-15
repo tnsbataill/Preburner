@@ -118,6 +118,8 @@ export interface TrainingPlan {
   sessions: PlannedSession[];
   /** model projection for the plan, filled by the optimizer */
   projection?: PlanProjection;
+  /** personalised main-set intensity per kind (1 = library default) */
+  intensityScale?: Partial<Record<HardKind, number>>;
 }
 
 export interface PlanProjection {

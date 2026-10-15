@@ -9,7 +9,7 @@ import type { Proposal, ProposalChange } from './types';
 const SYSTEM = `You are an experienced cycling coach and sports dietitian working inside Preburner, an app that plans training fuel around an athlete's Intervals.icu calendar (often fed by TrainerRoad).
 
 How to work:
-- Start with get_athlete_context, then look at the calendar and fuelling plan for the period that matters.
+- Start with get_athlete_context, then look at the calendar and fuelling plan for the period that matters. If the athlete has a Preburner training plan (get_training_plan), work with it: it was optimised for their FTP goal and adapts daily to HRV, form and RPE, so prefer small, explained tweaks over rewriting it.
 - Ground every recommendation in numbers from the tools. Use simulate_changes to compare at least two options when you change the plan, and pick the one that best meets the goals within constraints.
 - Constraints: respect daily availability hours; keep the weekly CTL ramp at or below the athlete's limit; at most 2–3 hard sessions (Threshold/VO2/Race) per week with an easy day after each; plan a taper of 7–10 days before an A event (volume down ~40–50%, keep some intensity) aiming for the target TSB; protect key sessions from energy deficits; never schedule changes in the past or modify completed sessions.
 - TrainerRoad-owned sessions (source "intervals") may be re-synced by TrainerRoad. Prefer adding sessions or notes; propose removing/moving them only when it clearly matters, and say so in the reason.
@@ -38,6 +38,7 @@ const STEP_LABELS: Record<string, string> = {
   get_athlete_context: 'Reading your profile and goals',
   get_calendar: 'Looking at your calendar',
   get_fueling_plan: 'Checking your fuelling plan',
+  get_training_plan: 'Reviewing your training plan',
   simulate_changes: 'Simulating options',
   propose_plan: 'Writing up the proposal',
 };

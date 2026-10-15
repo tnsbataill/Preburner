@@ -47,3 +47,16 @@ describe('coach tools', () => {
     expect(errors).toHaveLength(2);
   });
 });
+
+describe('coach training-plan tool', () => {
+  it('reports the plan, readiness and next sessions, or says there is none', async () => {
+    const { generatePlan } = await import('../../training/generator');
+    const { INITIAL_TRAINING } = await import('../../state/training');
+    expect((runTool(world, 'get_training_plan', {}) as any).plan).toBeNull();
+    const plan = generatePlan({ start: today, weeks: 6, objective: 'ftp', ftp: 260, ctl: 55, atl: 55, availabilityHours: settings.goals.availabilityHours, maxRampPerWeek: 6 });
+    const out = runTool({ ...world, training: { ...INITIAL_TRAINING, plan } }, 'get_training_plan', {}) as any;
+    expect(out.goal).toBe('ftp');
+    expect(out.weeks).toHaveLength(6);
+    expect(out.next7Days.length).toBeGreaterThan(3);
+  });
+});

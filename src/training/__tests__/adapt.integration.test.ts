@@ -123,3 +123,30 @@ describe('calendar merge', () => {
     expect(mergePlanIntoCalendar([tr], { ...INITIAL_TRAINING, plan, replaceExternal: false }, today, 'demo', 260).find((w) => w.id === 'icu-1')).toBeDefined();
   });
 });
+
+describe('intensity personalisation', () => {
+  it('repeated failures at a kind lower its targets (bounded), easy reports give some back', async () => {
+    const { applyRpe } = await import('../adapt');
+    const vo2 = plan.sessions.filter((s) => s.kind === 'vo2');
+    expect(vo2.length).toBeGreaterThan(2);
+    const first = vo2[0];
+    const failed = (id: string, date: string): RideRecord => ride(date, first, { id, failed: true, rpe: 9, level: 1 });
+    const r1 = failed('a', first.date);
+    let res = applyRpe(plan.sessions, [r1], r1, addDays(first.date, 1));
+    expect(res.scales.vo2).toBe(0.97);
+    const next = res.sessions.find((s) => s.id === vo2[1].id)!;
+    const peak = (s: PlannedSession) => Math.max(...s.steps.map((x) => x.hi));
+    expect(peak(next)).toBeLessThan(peak(vo2[1]));
+    // Keep failing: never below 88%.
+    let rides = [r1];
+    for (let i = 0; i < 8; i += 1) {
+      const r = failed(`f${i}`, addDays(first.date, i + 2));
+      rides = [...rides, r];
+      res = applyRpe(res.sessions, rides, r, addDays(first.date, i + 3), undefined, false, res.scales);
+    }
+    expect(res.scales.vo2).toBe(0.88);
+    const easy = ride(addDays(first.date, 12), first, { id: 'e', rpe: 2, level: 1 });
+    res = applyRpe(res.sessions, [...rides, easy], easy, addDays(first.date, 13), undefined, false, res.scales);
+    expect(res.scales.vo2).toBe(0.9);
+  });
+});

@@ -85,7 +85,7 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
   const [busy, setBusy] = useState(false);
   const byId = useMemo(() => new Map(workouts.map((w) => [w.id, w])), [workouts]);
   const accepted = proposal.changes.filter((c) => c.status === 'accepted');
-  const world = { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today };
+  const world = { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today, training: s.training };
   const impact = useMemo(() => {
     if (!accepted.length) return undefined;
     const sim = runTool({ ...world }, 'simulate_changes', { changes: accepted }) as { baseline: { event: { ctl: number; tsb: number } | null; ctlIn4Weeks: number }; withChanges: { event: { ctl: number; tsb: number } | null; ctlIn4Weeks: number } };
@@ -182,7 +182,7 @@ export function CoachPage() {
       const res = await runCoach({
         apiKey: s.connection.anthropicKey,
         model: s.connection.coachModel,
-        world: { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today },
+        world: { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today, training: s.training },
         history: loadCoachHistory() as Anthropic.Beta.BetaMessageParam[],
         userText: text,
         signal: abort.current.signal,

@@ -4,6 +4,8 @@ import { buildPlan } from '../engine/plan';
 import { addDays, diffDays, weekStartOf, weekdayShort } from '../engine/time';
 import type { DateKey, Settings, WeightEntry, WellnessDay, Workout } from '../engine/types';
 import { makeWorkout } from '../engine/workout';
+import type { TrainingState } from '../state/training';
+import { planEnd } from '../training/generator';
 import type { ProposalChange, ProposedSession } from './types';
 
 // Pure tool implementations for the coach agent. Everything the model sees is
@@ -15,6 +17,8 @@ export interface CoachWorld {
   wellness: WellnessDay[];
   weights: WeightEntry[];
   today: DateKey;
+  /** Preburner training plan state, when one exists */
+  training?: TrainingState;
 }
 
 const intensities = ['Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2', 'Race'];
@@ -75,6 +79,12 @@ export const COACH_TOOLS = [
       properties: { start: { type: 'string' }, end: { type: 'string' } },
       required: ['start', 'end'],
     },
+  },
+  {
+    name: 'get_training_plan',
+    description:
+      "The athlete's Preburner training plan, if any: goal, dates, weekly phases and load, projected FTP range, today's readiness (HRV/RHR/form/feel), recent automatic adjustments, and the next 7 days of sessions. Plan sessions have source \"preburner\" in the calendar. Call this before changing training.",
+    input_schema: { type: 'object', additionalProperties: false, properties: {} },
   },
   {
     name: 'simulate_changes',
@@ -240,6 +250,24 @@ export function runTool(world: CoachWorld, name: string, input: Record<string, u
         energyAvailability: d.energy.energyAvailability,
         warnings: d.flags.filter((f) => f.level !== 'info').map((f) => f.message),
       }));
+    }
+    case 'get_training_plan': {
+      const t = world.training;
+      const plan = t?.plan;
+      if (!plan) return { plan: null, note: 'No Preburner training plan. The athlete can generate one on the Plan page.' };
+      return {
+        goal: plan.request.objective,
+        start: plan.request.start,
+        end: planEnd(plan),
+        workingFtp: t.ftp ?? plan.request.ftp,
+        projectedFtp: plan.projection ? { p10: Math.round(plan.projection.finalFtp.p10), p50: Math.round(plan.projection.finalFtp.p50), p90: Math.round(plan.projection.finalFtp.p90) } : null,
+        shape: plan.genome,
+        weeks: plan.weeks.map((w) => ({ start: w.start, phase: w.phase, tss: w.plannedTss, hours: w.hours, hardSessions: w.hardSessions })),
+        onIntervals: !!t.appliedAt,
+        readiness: t.readiness ? { level: t.readiness.level, reasons: t.readiness.reasons } : null,
+        recentAdjustments: t.adjustments.slice(0, 8).map((a) => `${a.date} ${a.action}: ${a.reason}`),
+        next7Days: plan.sessions.filter((x) => x.date >= world.today && x.date <= addDays(world.today, 6)).map((x) => ({ date: x.date, title: x.title, durationMin: x.durationMin, tss: x.tss, purpose: x.purpose })),
+      };
     }
     case 'simulate_changes': {
       const changes = (input.changes ?? []) as Array<Omit<ProposalChange, 'id' | 'status'>>;

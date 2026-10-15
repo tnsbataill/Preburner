@@ -96,6 +96,12 @@ export function habitAvailability(rides: RideRecord[], today: string): Record<We
   return out;
 }
 
+/** Optional trace hook for debugging single runs. */
+export let simLog: ((line: string) => void) | undefined;
+export function setSimLog(fn?: (line: string) => void) {
+  simLog = fn;
+}
+
 export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, seed: number): RunResult {
   let plan = plan0;
   const start = plan.request.start;
@@ -106,15 +112,18 @@ export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, se
   const cfg = strat.adapt === false || strat.adapt === undefined ? undefined : { ...DEFAULT_ADAPT, ...strat.adapt };
   let adjustments = 0;
   let lastReplan = '';
+  const downgrades: string[] = [];
   for (let day = start; day <= end; day = addDays(day, 1)) {
     if (cfg) {
       const loads = loadsByDate(dayLoads(a.rides.filter((r) => r.date >= addDays(day, -120))));
       const series = pmc(addDays(day, -120), loads, 120);
       const last = series.at(-1)!;
-      const out = adaptDay({ plan, today: day, rides: a.rides, wellness: a.wellness, ftpSet: a.ftpSet, tsb: last.ctl - last.atl }, cfg);
+      const out = adaptDay({ plan, today: day, rides: a.rides, wellness: a.wellness, ftpSet: a.ftpSet, tsb: last.ctl - last.atl, recentDowngrades: downgrades }, cfg);
+      for (const adj of out.adjustments) if (adj.action === 'downgrade') downgrades.push(day);
       plan = out.plan;
       a.ftpSet = out.ftpSet;
       adjustments += out.adjustments.length;
+      for (const adj of out.adjustments) simLog?.(`${day} ${out.readiness.level} ${adj.action}: ${adj.reason}`);
       if (out.replan && (!lastReplan || diffDays(lastReplan, day) >= 10) && diffDays(day, end) >= 14) {
         // Long interruption: rebuild the rest of the plan from today's state.
         const weeks = Math.max(1, Math.floor((diffDays(day, end) + 1) / 7));
@@ -126,6 +135,10 @@ export function livePlan(a: SimAthlete, plan0: TrainingPlan, strat: Strategy, se
     }
     const s = plan.sessions.find((x) => x.date === day);
     const ride = a.live(s ? { id: s.id, kind: s.kind, level: s.level, steps: s.steps, labels: expandLabels(s.blocks) } : undefined);
+    if (simLog) {
+      const t = a.truth.at(-1)!;
+      simLog(`  ${day} ${s ? `${s.kind} L${s.level} ${s.tss}tss` : 'rest'} ${ride ? `rode rpe ${ride.rpe} feel ${ride.feel}${ride.failed ? ' FAILED' : ''}` : s ? 'SKIPPED' : ''} | true ${t.ftp.toFixed(0)} rested ${t.rested.toFixed(0)} strain ${t.strain.toFixed(2)}${t.ill ? ' ILL' : ''}${t.stressed ? ' STRESS' : ''} ftpSet ${a.ftpSet}`);
+    }
     // Athletes update their FTP after a test whatever the strategy.
     if (ride?.isTest && ride.best20) a.ftpSet = Math.round(ride.best20 * 0.95);
   }

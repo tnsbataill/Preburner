@@ -26,6 +26,38 @@ It's a PWA hosted on GitHub Pages. Everything stays in your browser; keys are on
 
 Time handling is local wall clock throughout. TrainerRoad events arrive date-only (00:00), so Preburner treats them as "time unknown", uses your usual slot for that weekday, and lets you set the real time with one tap.
 
+## Training plans
+
+The **Plan** tab builds the training itself. You pick a goal (raise FTP by default, peak for an event, or build fitness), a length, and whether to optimise. The plan is generated in one shot, then adjusted every day.
+
+- **History.**
+  - Intervals.icu supplies recent rides with RPE and feel, plus HRV, resting HR and sleep.
+  - Strava-sourced rides can't come through the Intervals API. Import your Strava archive instead (Strava → Settings → My Account → Download your archive) on the Plan page, or run `npx vite-node scripts/import-strava.ts <export.zip>`. The archive is read locally, and only per-ride summaries are kept.
+- **Model.**
+  - A fitness-fatigue model with per-intensity fitness, diminishing returns and variable-dose fatigue.
+  - It's fitted to your FTP history with population priors. Most rides are sub-maximal, so their best efforts only count as lower bounds.
+- **Generator.**
+  - Base → build → test with progression levels.
+  - Evidence-based limits the optimiser can't override:
+    - at most 3 hard days a week, never back to back;
+    - at most 2 VO2+ sessions a week;
+    - at least 70% of riding time easy;
+    - your weekly ramp cap;
+    - a recovery week every 2–4 weeks.
+- **Optimiser.** Searches about 150 plan shapes against an ensemble of fitted models and picks the best risk-adjusted projected FTP.
+- **Daily adaptation.**
+  - HRV (7-day lnRMSSD vs your normal range), resting HR and form can ease or move a hard day.
+  - "How did it feel?" (RPE and feel) moves progression levels against your own RPE norm.
+  - Repeated failures lower that session type's targets.
+  - A test or breakthrough effort updates FTP.
+  - Long gaps rebuild the remaining weeks.
+- **Calendar.**
+  - Plan sessions feed the fuelling engine and replace other planned (e.g. TrainerRoad) sessions inside the plan window.
+  - **Send to Intervals** writes them as Preburner-tagged workouts with structure, and re-sending is idempotent.
+  - Clear your TrainerRoad plan for those weeks so TR doesn't keep syncing its own sessions.
+
+Design and evidence are in [docs/training-plan-design.md](docs/training-plan-design.md). Simulation results, including what *didn't* help, are in [docs/training-plan-results.md](docs/training-plan-results.md).
+
 ## Intervals.icu
 
 1. Intervals.icu → Settings → Developer: copy your API key.
@@ -55,6 +87,7 @@ Layout:
 - `src/engine/`: pure model (energy, fuelling, scheduler, goals, glycogen, fitness, plan). Golden day plans live in `src/engine/__tests__/golden/` as readable text.
 - `src/intervals/`: REST client, event/activity/wellness mapping, sync.
 - `src/coach/`: agent loop, tools, applying proposals.
+- `src/training/`: training-plan layer: session library, generator, response model + fit, optimiser, daily adaptation, history import (`history/`), and the synthetic-athlete simulator (`sim/`, driven by `scripts/sim-*.ts`).
 - `src/state/`: Zustand store (persisted to localStorage) and a one-time import from the v1 IndexedDB.
 - `src/pages`, `src/components`, `src/ui`: React UI (Tailwind; dark and light themes).
 

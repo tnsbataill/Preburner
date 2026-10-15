@@ -1,0 +1,93 @@
+# Training plan layer: simulation results
+
+These results come from a **simulated world** I built (`src/training/sim/`). They show the algorithm behaves as designed and catch regressions. They are not evidence that it works on real riders. The external check is a backtest on real history, which runs once a Strava archive is imported.
+
+## Setup
+
+- **Athletes.** A population of synthetic riders with hidden physiology (`sim/truth.ts`). The truth model is deliberately different from the planning model:
+  - per-domain fitness time constants;
+  - a genetic ceiling;
+  - stress-weighted fatigue;
+  - a strain compartment that drives non-functional overreaching and illness;
+  - life-stress episodes;
+  - individual power-duration profiles;
+  - sessions that fail when targets exceed what the rider can hold.
+- **History.** Each rider lives 6 unrecorded months, then 12 recorded months of self-directed training: rides, tests, group rides, HRV/RHR, RPE and feel.
+- **Planning.** The planner only sees what real data would show.
+- **Grading.** Every strategy is graded on the rider's **true** FTP on the final test day.
+- **Pairing.** Strategies run on identical riders with common random numbers: the same illnesses, life stress and noise. Only decisions differ.
+
+Reproduce:
+
+```bash
+npx vite-node scripts/sim-backtest.ts 80        # model fit vs persistence
+npx vite-node scripts/sim-strategies.ts 60 12   # closed-loop plan comparison
+npx vite-node scripts/sim-tune-adapt.ts 60 on   # adaptation ablations
+```
+
+## 1. Can the model learn a rider from their history?
+
+Fit on the first 9 months, then predict true FTP over the next 3 (80 riders):
+
+| Model | MAPE mean | median | p90 |
+| --- | --- | --- | --- |
+| Persistence (best recent test / max effort) | 3.17% | 1.64% | 7.82% |
+| Population prior, level fitted only | 2.96% | 2.16% | 5.54% |
+| `core`: fitness gain, fatigue gain, fitness τ | **2.80%** | 1.95% | **5.59%** |
+| `full`: adds per-domain weights and saturation | 2.99% | 1.99% | 6.77% |
+
+- Individualising three parameters helps, mostly in the tail: riders with stale or untested FTP.
+- Per-domain weights (which intensity a rider responds to) are **not identifiable** from typical data. They made predictions worse, so the planner fits `core` and keeps domain weights at the prior.
+- Persistence still has the best median. When a rider tests regularly, their last test is hard to beat.
+
+## 2. Do optimised plans raise FTP more?
+
+12-week FTP plans, 60 riders. Gain is in true FTP.
+
+| Strategy | Mean | Median | p10 | p90 | Beats static |
+| --- | --- | --- | --- | --- | --- |
+| Static template (TrainerRoad-style, week-1 test) | 3.46% | 2.93% | 0.96% | 6.06% | — |
+| Optimised on population priors | 3.20% | 3.30% | 0.13% | 6.40% | 28/60 |
+| **Optimised on the individual fit** | **3.73%** | **3.81%** | 0.94% | 6.40% | **38/60** |
+| Individual fit + daily adaptation | 3.64% | 3.80% | 0.43% | 5.88% | 39/60 |
+| Individual fit + adaptation, no RPE/feel | 3.75% | 3.74% | 0.47% | 6.12% | 40/60 |
+
+- Optimising on **your fit** beats the template for most riders. Optimising on population priors does not.
+- The evidence-based guards cost some simulated gain:
+  - at most 2 VO2+ sessions a week;
+  - at least 70% of riding time easy.
+  
+  Before the guards, the optimiser beat the template by about 1.7 points, by stacking VO2 work. That reflects an assumption I built into the simulator, so the guards stay: on intensity distribution, the published literature beats my sim.
+
+## 3. Does daily adaptation (readiness + RPE) help?
+
+Paired against the same optimised plan without adaptation (60 riders):
+
+| Config | Δ gain | Sick days |
+| --- | --- | --- |
+| All on (default) | −0.09 ± 0.08 pp | 2.20 vs 2.30 |
+| Readiness only | +0.02 ± 0.08 pp | 2.27 |
+| RPE/feel only | +0.01 ± 0.09 pp | 2.28 |
+| Readiness with narrow SWC (0.5 SD) | −0.17 ± 0.08 pp | 2.30 |
+
+- Adaptation is **neutral on FTP gain** in this world, within noise. It modestly cuts sick days.
+- Its job is a safety net, not a gain engine. That matches the HRV-guided training literature: similar average gains, fewer bad outcomes.
+- **Bugs the simulation caught and fixed:**
+  - A single failed VO2 session lowered FTP twice (−6%). This cost one rider 4 points.
+  - Readiness kept cancelling sessions through a 6-week life-stress stretch. Now it makes at most 2 swaps a week, then eases sessions instead.
+  - Repeated VO2 failures stepped levels down without fixing the real problem, which was the intensity. Now the session type's targets drop 3% at a time (down to −12%) and come back when sessions feel easy.
+- **Known limitation:** the simulator treats a failed interval as ridden at 95% of the rider's limit. That makes failing nearly free stimulus, so the sim probably understates the value of personalising intensity.
+
+## What runs in the app
+
+| Default | Value |
+| --- | --- |
+| Fit | `core` |
+| Ensemble | 16 members |
+| Optimiser | about 150 genomes evaluated (random + coordinate descent), risk aversion 0.5 SD |
+| Readiness | SWC 1.0 SD on 7-day lnRMSSD; RHR +3 bpm; TSB −35 |
+| Red days | need 2 physiological markers |
+| Feel | can only make a day amber |
+| RPE | personal baseline per session type after 3 reports |
+| Progression | ±1 level per report, within ±2 of plan |
+| FTP from RPE | needs 4 sessions averaging ≥ 2 points off |
