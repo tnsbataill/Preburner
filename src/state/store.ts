@@ -9,7 +9,7 @@ import { syncIntervals, syncTrainingHistory } from '../intervals/sync';
 import { type AthleteSnapshot, type PlanOptions, planFromHistory } from '../training/planner';
 import { readArchive, toRideRecords } from '../training/history/strava';
 import { readZipStream } from '../training/history/zip';
-import { INITIAL_TRAINING, type Feedback, type TrainingState, applyFeedback, demoTrainingHistory, historyRides, runAdaptation, sessionEvent } from './training';
+import { INITIAL_TRAINING, type Feedback, type TrainingState, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation } from './training';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
 
@@ -174,40 +174,48 @@ export const useApp = create<AppState>()(
         const today = todayKey(s.settings.profile.timezone);
         // Races already on the calendar are kept and planned around.
         const races = [...s.workouts, ...s.localWorkouts].filter((w) => /^RACE_/.test(w.category ?? '') && !w.completed && w.date >= today).map((w) => w.date);
-        const { plan } = planFromHistory(trainingSnapshot(s, today), { ...opts, blockedDates: [...(opts.blockedDates ?? []), ...races] });
+        // On Intervals, zones resolve against Intervals' FTP, so plan with that and
+        // surface the model's estimate as a suggestion when they disagree.
+        const intervals = s.connection.mode === 'intervals';
+        const { plan, analysis } = planFromHistory(trainingSnapshot(s, today), {
+          ...opts,
+          blockedDates: [...(opts.blockedDates ?? []), ...races],
+          ...(intervals ? { ftp: s.settings.profile.ftp } : {}),
+        });
+        const est = analysis.ftpEstimate;
+        const ftpSuggestion =
+          intervals && Math.abs(est - s.settings.profile.ftp) > 0.03 * s.settings.profile.ftp
+            ? { ftp: est, reason: `Your recent rides put FTP at about ${est} W (Intervals has ${s.settings.profile.ftp} W)`, date: today }
+            : undefined;
         set((st) => ({
-          training: { ...st.training, plan, ftp: plan.request.ftp, appliedAt: undefined, dirtyIds: [], adjustments: [], lastAdapt: undefined, readiness: undefined },
+          training: { ...st.training, plan, ftp: plan.request.ftp, ftpSuggestion, appliedAt: undefined, dirtyIds: [], adjustments: [], lastAdapt: undefined, readiness: undefined },
         }));
         get().adaptTraining();
       },
 
       discardTrainingPlan: async () => {
-        const { connection, training, workouts } = get();
-        if (connection.mode === 'intervals' && connection.intervalsKey && training.appliedAt) {
+        const { connection, workouts, settings } = get();
+        if (connection.mode === 'intervals' && connection.intervalsKey) {
           const client = new IntervalsClient(connection.intervalsKey, connection.athleteId || '0');
-          const today = todayKey(get().settings.profile.timezone);
-          // Remove the plan's future events from the calendar (past ones stay as history).
-          for (const w of workouts.filter((x) => x.externalId?.startsWith('preburner-plan-') && x.date >= today && !x.completed)) {
-            if (w.id.startsWith('icu-')) await client.deleteEvent(Number(w.id.slice(4)));
-          }
+          // Remove the plan's future events (past ones stay as history).
+          const { deleteIds } = reconcilePlanEvents(undefined, workouts, { dirtyIds: [] }, todayKey(settings.profile.timezone), settings.schedule);
+          for (const id of deleteIds) await client.deleteEvent(id);
         }
         set((s) => ({ training: { ...s.training, plan: undefined, appliedAt: undefined, dirtyIds: [], adjustments: [], readiness: undefined, lastAdapt: undefined } }));
         if (connection.mode === 'intervals') await get().sync();
       },
 
       applyTrainingPlan: async () => {
-        const { connection, training, settings } = get();
-        const plan = training.plan;
-        if (!plan) return;
+        const { connection, training, settings, workouts } = get();
+        if (!training.plan) return;
         if (connection.mode !== 'intervals' || !connection.intervalsKey) {
           set((s) => ({ training: { ...s.training, appliedAt: new Date().toISOString(), dirtyIds: [] } }));
           return;
         }
-        const today = todayKey(settings.profile.timezone);
         const client = new IntervalsClient(connection.intervalsKey, connection.athleteId || '0');
-        const todo = training.appliedAt ? plan.sessions.filter((x) => training.dirtyIds.includes(x.id)) : plan.sessions;
-        const events = todo.filter((x) => x.date >= today).map((x) => sessionEvent(x, settings.schedule));
-        for (let i = 0; i < events.length; i += 50) await client.upsertEvents(events.slice(i, i + 50));
+        const { upsert, deleteIds } = reconcilePlanEvents(training.plan, workouts, training, todayKey(settings.profile.timezone), settings.schedule);
+        for (let i = 0; i < upsert.length; i += 50) await client.upsertEvents(upsert.slice(i, i + 50));
+        for (const id of deleteIds) await client.deleteEvent(id);
         set((s) => ({ training: { ...s.training, appliedAt: new Date().toISOString(), dirtyIds: [] } }));
         await get().sync();
       },
@@ -240,7 +248,10 @@ export const useApp = create<AppState>()(
 
       adaptTraining: () => {
         const s = get();
-        const patch = runAdaptation(s.training, todayKey(s.settings.profile.timezone), s.settings.profile.ftp);
+        // A suggestion the athlete has applied in Intervals is done.
+        const sug = s.training.ftpSuggestion;
+        if (sug && Math.abs(sug.ftp - s.settings.profile.ftp) <= 2) set((st) => ({ training: { ...st.training, ftpSuggestion: undefined } }));
+        const patch = runAdaptation(s.training, todayKey(s.settings.profile.timezone), s.settings.profile.ftp, undefined, s.connection.mode);
         if (patch) set((st) => ({ training: { ...st.training, ...patch } }));
       },
 

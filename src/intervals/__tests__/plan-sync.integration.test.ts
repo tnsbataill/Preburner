@@ -1,0 +1,150 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { addDays, todayKey } from '../../engine/time';
+import { useApp } from '../../state/store';
+import type { IcuEvent } from '../client';
+import * as rec from './fixtures/recorded';
+
+// The training-plan write paths against a stateful fake Intervals.icu: the real
+// store actions, client, mapping and planner run; only HTTP is faked. Events
+// upsert by external_id like the real bulk endpoint.
+
+const TZ = 'America/New_York';
+const today = todayKey(TZ);
+const d = (o: number) => addDays(today, o);
+
+class FakeIntervals {
+  events: IcuEvent[] = [
+    { id: 1, start_date_local: `${d(9)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'TR Lamarck', moving_time: 4500, icu_training_load: 99, tags: ['trainerroad'] },
+    { id: 2, start_date_local: `${d(20)}T08:00:00`, category: 'RACE_B', type: 'Ride', name: 'Gran Fondo', moving_time: 14400, icu_training_load: 260 },
+  ];
+  nextId = 100;
+  activityPuts: Array<{ id: string; body: unknown }> = [];
+  log: string[] = [];
+  activities = Array.from({ length: 120 }, (_, i) => {
+    const day = d(-120 + i);
+    const hard = i % 7 === 1 || i % 7 === 3;
+    return {
+      id: `a${i}`,
+      start_date_local: `${day}T17:30:00`,
+      type: 'VirtualRide',
+      name: hard ? 'Sweet Spot 3x15' : 'Endurance',
+      moving_time: hard ? 4800 : 5400,
+      icu_training_load: hard ? 85 : 55,
+      icu_intensity: hard ? 82 : 66,
+      icu_ftp: 305,
+      icu_pm_ftp: hard ? 300 + (i % 5) : undefined,
+      icu_zone_times: hard ? [{ id: 'Z2', secs: 2400 }, { id: 'Z4', secs: 2700 }] : [{ id: 'Z2', secs: 5400 }],
+      icu_rpe: hard ? 6 : 3,
+      feel: 2,
+      source: 'GARMIN_CONNECT',
+    };
+  });
+  fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const p = url.pathname;
+    const method = init?.method ?? 'GET';
+    this.log.push(`${method} ${p}`);
+    const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (p.endsWith('/athlete/0') || p.endsWith('/athlete/i123456')) return json({ ...rec.athlete, timezone: TZ });
+    if (p.endsWith('/events.json')) return json(this.events);
+    if (p.endsWith('/events/bulk') && method === 'POST') {
+      for (const e of JSON.parse(String(init!.body)) as IcuEvent[]) {
+        const i = this.events.findIndex((x) => x.external_id && x.external_id === e.external_id);
+        if (i >= 0) this.events[i] = { ...this.events[i], ...e };
+        else this.events.push({ ...e, id: (this.nextId += 1) });
+      }
+      return json([]);
+    }
+    const del = /\/events\/(\d+)$/.exec(p);
+    if (del && method === 'DELETE') {
+      this.events = this.events.filter((e) => e.id !== Number(del[1]));
+      return new Response(null, { status: 204 });
+    }
+    if (p.endsWith('/activities')) return json(this.activities);
+    const act = /\/activity\/([^/]+)$/.exec(p);
+    if (act && method === 'PUT') {
+      this.activityPuts.push({ id: act[1], body: JSON.parse(String(init!.body)) });
+      return json({});
+    }
+    if (p.endsWith('/wellness.json')) return json(Array.from({ length: 90 }, (_, i) => ({ id: d(-90 + i), ctl: 60, atl: 62, hrv: 60 + (i % 5), restingHR: 48 + (i % 3) })));
+    return new Response('not found', { status: 404 });
+  };
+  planEvents() {
+    return this.events.filter((e) => e.external_id?.startsWith('preburner-plan-'));
+  }
+}
+
+// Node has no localStorage; give the persisted store an in-memory one.
+const mem = new Map<string, string>();
+(globalThis as { localStorage?: unknown }).localStorage ??= { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+
+const fake = new FakeIntervals();
+const realFetch = globalThis.fetch;
+beforeAll(() => {
+  globalThis.fetch = fake.fetch as typeof fetch;
+  useApp.getState().resetAll();
+  useApp.setState((s) => ({ onboarded: true, connection: { ...s.connection, mode: 'intervals', intervalsKey: 'k', athleteId: '0' }, settings: { ...s.settings, profile: { ...s.settings.profile, timezone: TZ } } }));
+});
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
+
+describe('training plan <-> Intervals.icu', () => {
+  it('sync maps RPE, feel, zones, modelled FTP and HRV into the training history', async () => {
+    await useApp.getState().sync();
+    const t = useApp.getState().training;
+    expect(useApp.getState().connection.syncError).toBeUndefined();
+    const hard = t.intervalsRides.find((r) => r.durationMin === 80)!;
+    expect(hard).toMatchObject({ rpe: 6, feel: 2, ftpSet: 305, startMin: 17 * 60 + 30 });
+    expect(hard.domain.mid).toBeGreaterThan(hard.domain.low);
+    expect(0.95 * hard.best20!).toBeCloseTo(300, -1);
+    expect(t.wellness.at(-1)!.lnRmssd).toBeCloseTo(Math.log(64), 1);
+  });
+
+  it('plans with the Intervals FTP, keeps the race, and sends the plan once', async () => {
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    const plan = useApp.getState().training.plan!;
+    expect(plan.request.ftp).toBe(305);
+    expect(plan.sessions.find((s) => s.date === d(20))).toBeUndefined();
+    await useApp.getState().applyTrainingPlan();
+    const sent = fake.planEvents();
+    expect(sent).toHaveLength(plan.sessions.length);
+    const e = sent.find((x) => x.name?.startsWith('Sweet spot') || x.name?.startsWith('Threshold'))!;
+    expect(e).toMatchObject({ category: 'WORKOUT', tags: ['preburner', 'preburner-plan'] });
+    expect(e.description).toMatch(/\n- Warmup 10m 50-65%/);
+    expect(e.start_date_local).toMatch(/T\d\d:\d\d:00$/);
+    // Calendar after sync: plan events from Intervals, no duplicates, TR hidden, race kept.
+    const { mergePlanIntoCalendar } = await import('../../state/training');
+    const s = useApp.getState();
+    const cal = mergePlanIntoCalendar(s.workouts, s.training, today, 'intervals', 305);
+    expect(cal.filter((w) => w.source === 'preburner' && w.date >= today)).toHaveLength(plan.sessions.length);
+    expect(cal.find((w) => w.title === 'TR Lamarck')).toBeUndefined();
+    expect(cal.find((w) => w.title === 'Gran Fondo')).toBeDefined();
+    // Re-applying is idempotent.
+    await useApp.getState().applyTrainingPlan();
+    expect(fake.planEvents()).toHaveLength(plan.sessions.length);
+  });
+
+  it('a new plan over an applied one leaves no orphaned events', async () => {
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 4, start: d(3), optimize: false });
+    const plan = useApp.getState().training.plan!;
+    await useApp.getState().applyTrainingPlan();
+    const ids = new Set(plan.sessions.map((x) => `preburner-plan-${x.id}`));
+    const future = fake.planEvents().filter((e) => e.start_date_local.slice(0, 10) >= today);
+    expect(future.every((e) => ids.has(e.external_id!))).toBe(true);
+    expect(future).toHaveLength(plan.sessions.length);
+  });
+
+  it('RPE and feel answered in the app are written back to the activity', async () => {
+    const ride = useApp.getState().training.intervalsRides.at(-1)!;
+    await useApp.getState().setFeedback(ride.id, { rpe: 7, feel: 2 });
+    expect(fake.activityPuts.at(-1)).toEqual({ id: ride.id.slice(4), body: { icu_rpe: 7, feel: 2 } });
+  });
+
+  it('discarding removes the future plan events and keeps everything else', async () => {
+    await useApp.getState().discardTrainingPlan();
+    expect(fake.planEvents().filter((e) => e.start_date_local.slice(0, 10) >= today)).toHaveLength(0);
+    expect(fake.events.map((e) => e.name)).toEqual(expect.arrayContaining(['TR Lamarck', 'Gran Fondo']));
+    expect(useApp.getState().training.plan).toBeUndefined();
+  });
+});

@@ -298,6 +298,22 @@ function SessionRow({ s, today }: { s: PlannedSession; today: string }) {
   );
 }
 
+function FtpSuggestion() {
+  const sug = useApp((s) => s.training.ftpSuggestion)!;
+  const update = useApp((s) => s.update);
+  return (
+    <div className="mt-3 rounded-xl border border-ember/40 bg-ember/10 p-3 text-sm" data-testid="ftp-suggestion">
+      <div className="font-semibold">Suggested FTP: {sug.ftp} W</div>
+      <p className="mt-0.5 text-muted">
+        {sug.reason}. Your workouts' targets are worked out from the FTP in Intervals.icu, so change it there (Settings → Cycling → FTP), and in TrainerRoad if you ride its workouts. Preburner picks it up on the next sync.
+      </p>
+      <Button variant="ghost" className="mt-1 px-2 py-1 text-xs" onClick={() => update((s) => ({ training: { ...s.training, ftpSuggestion: undefined } }))}>
+        Dismiss
+      </Button>
+    </div>
+  );
+}
+
 function PlanView({ plan }: { plan: TrainingPlan }) {
   const today = useToday();
   const training = useApp((s) => s.training);
@@ -349,6 +365,7 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
         </div>
         {training.appliedAt && training.dirtyIds.length === 0 && <Chip className="mt-2 border-good/40 text-good">{mode === 'intervals' ? 'On your Intervals calendar' : 'Active'}</Chip>}
         {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+        {training.ftpSuggestion && mode === 'intervals' && <FtpSuggestion />}
         {proj && (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="FTP now" value={Math.round(proj.startFtp)} unit="W" sub={`zones set at ${training.ftp ?? plan.request.ftp} W`} />

@@ -29,8 +29,11 @@ export interface TrainingState {
   intervalsRides: RideRecord[];
   wellness: WellnessRecord[];
   plan?: TrainingPlan;
-  /** working FTP for the plan (zones); suggestions to change it go in the log */
+  /** working FTP for the plan's zones. In Intervals mode this always equals
+   *  the synced FTP (what the head unit resolves %FTP against). */
   ftp?: number;
+  /** FTP change the planner recommends but can't make itself (Intervals mode) */
+  ftpSuggestion?: { ftp: number; reason: string; date: DateKey };
   /** sessions sent to Intervals, and which have changed since */
   appliedAt?: string;
   dirtyIds: string[];
@@ -108,7 +111,7 @@ export function currentTsb(rides: RideRecord[], today: DateKey): { ctl: number; 
  * Run the daily adaptation once per day. Returns the patch for the training
  * state, or undefined when there's nothing to do.
  */
-export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg: AdaptConfig = DEFAULT_ADAPT): Partial<TrainingState> | undefined {
+export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg: AdaptConfig = DEFAULT_ADAPT, mode: 'demo' | 'intervals' = 'demo'): Partial<TrainingState> | undefined {
   const plan = t.plan;
   if (!plan || t.lastAdapt === today) return undefined;
   const rides = historyRides(t);
@@ -118,7 +121,12 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   const since = t.lastAdapt ? addDays(t.lastAdapt, 0) : addDays(today, -1);
   // Rides whose RPE was already applied (answered in-app) don't count twice.
   const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade').map((a) => a.date);
-  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: t.ftp ?? ftp, tsb, reviewed: t.reviewedRides, recentDowngrades }, cfg);
+  const working = mode === 'intervals' ? ftp : (t.ftp ?? ftp);
+  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades }, cfg);
+  const ftpAdj = out.adjustments.filter((a) => a.action === 'ftp').at(-1);
+  // Intervals resolves %FTP against its own FTP: suggest, don't silently diverge.
+  const ftpPatch: Partial<TrainingState> =
+    mode === 'intervals' ? { ftp: working, ...(ftpAdj && out.ftpSet !== working ? { ftpSuggestion: { ftp: out.ftpSet, reason: ftpAdj.reason, date: today } } : {}) } : { ftp: out.ftpSet };
   let next = out.plan;
   const adjustments = [...out.adjustments];
   if (out.replan) {
@@ -137,7 +145,7 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   const processed = rides.filter((r) => r.date >= since && r.date < today && r.kind && r.rpe !== undefined).map((r) => r.id);
   return {
     plan: next,
-    ftp: out.ftpSet,
+    ...ftpPatch,
     lastAdapt: today,
     reviewedRides: [...new Set([...t.reviewedRides, ...processed])].slice(-200),
     readiness: out.readiness,
@@ -157,18 +165,49 @@ export function mergePlanIntoCalendar(workouts: Workout[], t: TrainingState, tod
   const start = plan.request.start;
   const end = planEnd(plan);
   const inWindow = (d: DateKey) => d >= start && d <= end;
-  const onIntervals = mode === 'intervals' && !!t.appliedAt;
+  const current = new Set(plan.sessions.map((s) => s.id));
+  const synced = new Set(workouts.map((w) => planSessionId(w)).filter((x): x is string => !!x));
+  const dirty = new Set(t.dirtyIds);
   const kept = workouts.filter((w) => {
+    const sid = planSessionId(w);
+    // Plan events on Intervals: show only those that match the current plan
+    // and haven't changed locally since they were sent.
+    if (sid) return !w.completed && w.date >= today ? mode === 'intervals' && current.has(sid) && !dirty.has(sid) : true;
     if (w.completed || !inWindow(w.date) || w.date < today) return true;
     // Races and sessions the athlete added by hand always stay.
     if (/^RACE_/.test(w.category ?? '') || w.source === 'manual') return true;
-    if (w.source === 'preburner') return onIntervals ? !t.dirtyIds.some((id) => w.externalId === `preburner-plan-${id}`) : !w.externalId?.startsWith('preburner-plan-');
     return !t.replaceExternal;
   });
   const local = plan.sessions
-    .filter((s) => s.date >= today && (!onIntervals || t.dirtyIds.includes(s.id)))
+    .filter((s) => s.date >= today && !(mode === 'intervals' && synced.has(s.id) && !dirty.has(s.id)))
     .map((s) => sessionToWorkout(s, t.ftp ?? ftp));
   return [...kept, ...local];
+}
+
+const PLAN_PREFIX = 'preburner-plan-';
+/** Plan session id of a synced Intervals event Preburner created for a plan. */
+export function planSessionId(w: Workout): string | undefined {
+  return w.externalId?.startsWith(PLAN_PREFIX) ? w.externalId.slice(PLAN_PREFIX.length) : undefined;
+}
+
+/**
+ * What to write to Intervals so the calendar matches the current plan:
+ * upsert future sessions that are new or changed, delete future plan events
+ * that aren't in the plan any more (replans, a new plan over an old one).
+ */
+export function reconcilePlanEvents(plan: TrainingPlan | undefined, synced: Workout[], t: Pick<TrainingState, 'dirtyIds'>, today: DateKey, schedule: Schedule): { upsert: NewEvent[]; deleteIds: number[] } {
+  const future = (plan?.sessions ?? []).filter((s) => s.date >= today);
+  const current = new Set(future.map((s) => s.id));
+  const onCalendar = new Set(synced.map(planSessionId).filter((x): x is string => !!x));
+  const upsert = future.filter((s) => !onCalendar.has(s.id) || t.dirtyIds.includes(s.id)).map((s) => sessionEvent(s, schedule));
+  const deleteIds = synced
+    .filter((w) => !w.completed && w.date >= today && w.id.startsWith('icu-'))
+    .filter((w) => {
+      const sid = planSessionId(w);
+      return sid !== undefined && !current.has(sid);
+    })
+    .map((w) => Number(w.id.slice(4)));
+  return { upsert, deleteIds };
 }
 
 export function sessionEvent(s: PlannedSession, schedule: Schedule): NewEvent {
@@ -184,7 +223,7 @@ export function sessionEvent(s: PlannedSession, schedule: Schedule): NewEvent {
     description: `${s.purpose}\n\n${s.structure}`,
     moving_time: s.durationMin * 60,
     load_target: s.tss,
-    external_id: `preburner-plan-${s.id}`,
+    external_id: `${PLAN_PREFIX}${s.id}`,
     tags: ['preburner', 'preburner-plan'],
   };
 }
