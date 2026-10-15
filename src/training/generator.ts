@@ -191,7 +191,10 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
     const phase = phases[w];
     const weekStart = addDays(req.start, w * 7);
     const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-    const avail = dates.map((d) => Math.round((req.availabilityHours[weekdayOf(d)] ?? 0) * 60));
+    const blocked = new Set(req.blockedDates ?? []);
+    const avail = dates.map((d) => (blocked.has(d) ? 0 : Math.round((req.availabilityHours[weekdayOf(d)] ?? 0) * 60)));
+    // The day before a race: no hard session (cap it to an easy-length slot).
+    const preRace = dates.map((d) => blocked.has(addDays(d, 1)));
 
     // ---- weekly target ----
     let shape: WeekShape;
@@ -233,7 +236,7 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
     if (req.longRideDay !== undefined) longIdx = dates.findIndex((d) => weekdayOf(d) === req.longRideDay);
     else {
       const weekendIdx = dates.map((d, i) => ({ i, wd: weekdayOf(d) })).filter((x) => x.wd === 0 || x.wd === 6).map((x) => x.i);
-      const pool = (weekendIdx.length ? weekendIdx : dates.map((_, i) => i)).filter((i) => avail[i] >= MIN_LONG);
+      const pool = (weekendIdx.length ? weekendIdx : dates.map((_, i) => i)).filter((i) => avail[i] >= MIN_LONG && !preRace[i]);
       let bestScore = -Infinity;
       for (const i of pool) {
         // Score with as many hard days as can actually fit around this long day.
@@ -271,10 +274,10 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
     }
 
     // Hard days: never consecutive, never on the final test/openers days.
-    const blocked = slots.map((s) => !!s);
+    const taken = slots.map((s) => !!s);
     let hardDays: number[] = [];
     for (let count = wanted.length; count >= 1 && !hardDays.length; count -= 1) {
-      const availForHard = avail.map((a, i) => (blocked[i] || (testIdx >= 0 && i >= testIdx - 2) ? 0 : a));
+      const availForHard = avail.map((a, i) => (taken[i] || preRace[i] || (testIdx >= 0 && i >= testIdx - 2) ? 0 : a));
       hardDays = pickHardDays(availForHard, longIdx, count, needMin.slice(0, count)).days;
     }
     hardDays.forEach((d, k) => {
@@ -303,7 +306,7 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
         kind: afterHard && phase !== 'base' ? 'recovery' : 'endurance',
         level: 1,
         minutes: Math.min(avail[i], MIN_EASY),
-        maxMinutes: afterHard ? Math.min(avail[i], 60) : beforeHard ? Math.min(avail[i], 75) : avail[i],
+        maxMinutes: afterHard || preRace[i] ? Math.min(avail[i], 60) : beforeHard ? Math.min(avail[i], 75) : avail[i],
         prio: 2,
       };
     }

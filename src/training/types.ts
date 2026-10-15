@@ -103,6 +103,8 @@ export interface PlanRequest {
   maxRampPerWeek: number;
   /** preferred long-ride weekday; defaults to the biggest weekend slot */
   longRideDay?: Weekday;
+  /** days with something else on (races): no plan session, and an easy day before */
+  blockedDates?: DateKey[];
   /** open with an FTP test on the first hard day (when FTP is uncertain) */
   baselineTest?: boolean;
   /** starting progression levels per kind (from history); default derived from CTL */

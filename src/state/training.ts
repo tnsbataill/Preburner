@@ -160,6 +160,8 @@ export function mergePlanIntoCalendar(workouts: Workout[], t: TrainingState, tod
   const onIntervals = mode === 'intervals' && !!t.appliedAt;
   const kept = workouts.filter((w) => {
     if (w.completed || !inWindow(w.date) || w.date < today) return true;
+    // Races and sessions the athlete added by hand always stay.
+    if (/^RACE_/.test(w.category ?? '') || w.source === 'manual') return true;
     if (w.source === 'preburner') return onIntervals ? !t.dirtyIds.some((id) => w.externalId === `preburner-plan-${id}`) : !w.externalId?.startsWith('preburner-plan-');
     return !t.replaceExternal;
   });

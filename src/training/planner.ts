@@ -82,6 +82,8 @@ export interface PlanOptions {
   ftp?: number;
   baselineTest?: boolean;
   longRideDay?: Weekday;
+  /** race dates already on the calendar */
+  blockedDates?: DateKey[];
 }
 
 export function planFromHistory(snap: AthleteSnapshot, opts: PlanOptions, analysis = analyzeHistory(snap, opts.mode ?? 'core')): { plan: TrainingPlan; analysis: HistoryAnalysis; evaluated: number } {
@@ -98,6 +100,7 @@ export function planFromHistory(snap: AthleteSnapshot, opts: PlanOptions, analys
     availabilityHours: snap.availabilityHours,
     maxRampPerWeek: snap.maxRampPerWeek,
     longRideDay: opts.longRideDay,
+    blockedDates: opts.blockedDates,
     // No recent maximal effort: open with a test so zones start right.
     baselineTest: opts.baselineTest ?? (analysis.daysSinceMaxEffort === undefined || analysis.daysSinceMaxEffort > 42),
     startLevels: Object.keys(analysis.startLevels).length ? analysis.startLevels : undefined,

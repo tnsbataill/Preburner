@@ -172,7 +172,9 @@ export const useApp = create<AppState>()(
       generateTrainingPlan: (opts) => {
         const s = get();
         const today = todayKey(s.settings.profile.timezone);
-        const { plan } = planFromHistory(trainingSnapshot(s, today), opts);
+        // Races already on the calendar are kept and planned around.
+        const races = [...s.workouts, ...s.localWorkouts].filter((w) => /^RACE_/.test(w.category ?? '') && !w.completed && w.date >= today).map((w) => w.date);
+        const { plan } = planFromHistory(trainingSnapshot(s, today), { ...opts, blockedDates: [...(opts.blockedDates ?? []), ...races] });
         set((st) => ({
           training: { ...st.training, plan, ftp: plan.request.ftp, appliedAt: undefined, dirtyIds: [], adjustments: [], lastAdapt: undefined, readiness: undefined },
         }));

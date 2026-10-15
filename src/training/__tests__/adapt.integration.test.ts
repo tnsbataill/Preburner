@@ -150,3 +150,16 @@ describe('intensity personalisation', () => {
     expect(res.scales.vo2).toBe(0.9);
   });
 });
+
+describe('races', () => {
+  it('stay on the calendar inside the plan window, and the plan works around them', () => {
+    const raceDate = addDays(START, 20);
+    const race = { ...makeWorkout({ id: 'icu-77', date: raceDate, title: 'Gran Fondo', durationMin: 240, intensity: 'Race', ftp: 260, source: 'intervals' }), category: 'RACE_B' };
+    const p2 = generatePlan({ start: START, weeks: 8, objective: 'ftp', ftp: 260, ctl: 55, atl: 55, availabilityHours: DEFAULT_SETTINGS.goals.availabilityHours, maxRampPerWeek: 6, blockedDates: [raceDate] });
+    expect(p2.sessions.find((s) => s.date === raceDate)).toBeUndefined();
+    const dayBefore = p2.sessions.find((s) => s.date === addDays(raceDate, -1));
+    expect(dayBefore?.hard ?? false).toBe(false);
+    const merged = mergePlanIntoCalendar([race], { ...INITIAL_TRAINING, plan: p2 }, START, 'demo', 260);
+    expect(merged.find((w) => w.id === 'icu-77')).toBeDefined();
+  });
+});
