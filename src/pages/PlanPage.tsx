@@ -43,6 +43,7 @@ function DataCard() {
   const training = useApp((s) => s.training);
   const mode = useApp((s) => s.connection.mode);
   const importStrava = useApp((s) => s.importStrava);
+  const importHistoryJson = useApp((s) => s.importHistoryJson);
   const [progress, setProgress] = useState<number | undefined>();
   const [error, setError] = useState<string>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -54,7 +55,8 @@ function DataCard() {
     setError(undefined);
     setProgress(0);
     try {
-      await importStrava(f, setProgress);
+      if (f.name.toLowerCase().endsWith('.json')) await importHistoryJson(f);
+      else await importStrava(f, setProgress);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -71,10 +73,10 @@ function DataCard() {
         <Stat label="HRV days" value={hrvDays} />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <input ref={fileRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} data-testid="strava-file" />
+        <input ref={fileRef} type="file" accept=".zip,.json,application/zip,application/json" className="hidden" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} data-testid="strava-file" />
         <Button onClick={() => fileRef.current?.click()} disabled={progress !== undefined}>
           {progress !== undefined ? <Loader2 size={15} className="animate-spin" /> : <FileArchive size={15} />}
-          {progress !== undefined ? `Reading archive… ${Math.round(progress * 100)}%` : training.stravaReport ? 'Re-import Strava archive' : 'Import Strava archive'}
+          {progress !== undefined ? `Reading… ${Math.round(progress * 100)}%` : training.stravaReport ? 'Re-import history' : 'Import Strava archive or history file'}
         </Button>
         {training.stravaReport && (
           <span className="text-xs text-muted">

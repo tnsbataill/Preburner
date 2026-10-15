@@ -81,3 +81,29 @@ test('discarding the plan brings the original calendar back', async ({ page }) =
   await page.getByRole('button', { name: 'Next week' }).click();
   await expect(page.getByText('Threshold — Lamarck').first()).toBeVisible();
 });
+
+test('a history file (e.g. built from the Strava connector) drives the model and the plan', async ({ page }, info) => {
+  // Synthetic two-season history: steady riding, two FTP tests.
+  const rides = [];
+  const start = Date.parse('2025-01-06T12:00:00Z');
+  for (let d = 0; d < 260; d += 1) {
+    if (d % 7 === 4 || d % 7 === 0) continue;
+    const date = new Date(start + d * 86_400_000).toISOString().slice(0, 10);
+    const hard = d % 7 === 1 || d % 7 === 3;
+    const tss = hard ? 85 : 55;
+    rides.push({ id: `h-${d}`, date, durationMin: hard ? 60 : 90, tss, domain: hard ? { low: 30, mid: 50, high: 5 } : { low: 55, mid: 0, high: 0 }, ftpSet: 280, best20: hard ? 270 : undefined, isTest: d === 30 || d === 200, source: 'strava' });
+  }
+  rides.find((r) => r.isTest && r.date < '2025-03-01')!.best20 = 280 / 0.95;
+  rides.filter((r) => r.isTest).at(-1)!.best20 = 300 / 0.95;
+  const file = info.outputPath('history.json');
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(file, JSON.stringify({ rides }));
+
+  await onboardWithDemo(page);
+  await page.goto('/#/plan');
+  await page.getByTestId('strava-file').setInputFiles(file);
+  await expect(page.getByText(/Strava rides imported/)).toBeVisible();
+  await expect(page.getByTestId('model-card')).toContainText('Estimated FTP');
+  await page.getByTestId('generate-plan').click();
+  await expect(page.getByTestId('plan-summary')).toBeVisible({ timeout: 20_000 });
+});

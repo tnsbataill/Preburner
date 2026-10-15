@@ -41,7 +41,7 @@ The **Plan** tab builds the training itself. You pick a goal (raise FTP by defau
   - Evidence-based limits the optimiser can't override:
     - at most 3 hard days a week, never back to back;
     - at most 2 VO2+ sessions a week;
-    - at least 70% of riding time easy;
+    - at least 60% of riding time easy;
     - your weekly ramp cap;
     - a recovery week every 2–4 weeks.
 - **Optimiser.** Searches about 150 plan shapes against an ensemble of fitted models and picks the best risk-adjusted projected FTP.

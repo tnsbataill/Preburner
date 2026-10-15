@@ -55,7 +55,7 @@ Fit on the first 9 months, then predict true FTP over the next 3 (80 riders):
 - Optimising on **your fit** beats the template for most riders. Optimising on population priors does not.
 - The evidence-based guards cost some simulated gain:
   - at most 2 VO2+ sessions a week;
-  - at least 70% of riding time easy.
+  - at least 60% of riding time easy.
   
   Before the guards, the optimiser beat the template by about 1.7 points, by stacking VO2 work. That reflects an assumption I built into the simulator, so the guards stay: on intensity distribution, the published literature beats my sim.
 

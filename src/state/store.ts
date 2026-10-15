@@ -60,6 +60,8 @@ export interface AppState {
   discardTrainingPlan: () => Promise<void>;
   applyTrainingPlan: () => Promise<void>;
   importStrava: (file: File, onProgress?: (fraction: number) => void) => Promise<void>;
+  /** snapshots/history.json produced by scripts/build-history.ts */
+  importHistoryJson: (file: File) => Promise<void>;
   setFeedback: (rideId: string, fb: Feedback) => Promise<void>;
   adaptTraining: () => void;
 }
@@ -230,6 +232,19 @@ export const useApp = create<AppState>()(
         const rides = toRideRecords(activities, get().settings.profile.ftp);
         onProgress?.(1);
         set((s) => ({ training: { ...s.training, stravaRides: rides, stravaReport: { ...report, importedAt: new Date().toISOString() } } }));
+      },
+
+      importHistoryJson: async (file) => {
+        const data = JSON.parse(await file.text()) as { rides?: unknown };
+        if (!Array.isArray(data.rides)) throw new Error('Not a Preburner history file (no "rides" list).');
+        const rides = (data.rides as Array<Record<string, unknown>>).filter((r) => typeof r.date === 'string' && typeof r.tss === 'number') as unknown as typeof INITIAL_TRAINING.stravaRides;
+        set((s) => ({
+          training: {
+            ...s.training,
+            stravaRides: rides,
+            stravaReport: { activities: rides.length, rides: rides.length, withPower: rides.filter((r) => r.best20).length, withFile: 0, withRpe: rides.filter((r) => r.rpe).length, skipped: {}, first: rides[0]?.date, last: rides.at(-1)?.date, importedAt: new Date().toISOString() },
+          },
+        }));
       },
 
       setFeedback: async (rideId, fb) => {

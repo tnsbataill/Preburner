@@ -26,7 +26,7 @@ const CTL_K = 1 - 1 / 42;
 /** Evidence-based intensity limits (TID literature): kept outside the optimiser's reach. */
 export const MAX_HIGH_PER_WEEK = 2;
 /** minimum share of weekly riding time below ~76% FTP */
-export const MIN_LOW_TIME_SHARE = 0.7;
+export const MIN_LOW_TIME_SHARE = 0.6;
 const MIN_EASY = 45;
 const MIN_LONG = 90;
 const STEP_MIN = 15;
@@ -209,7 +209,9 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
     }
 
     // ---- quality mix ----
-    const hardCount = phase === 'base' || phase === 'build' ? g.hardPerWeek : 1;
+    // Coming back from a break: rebuild the base before stacking intensity.
+    const returnCap = ctl < 10 ? 1 : ctl < 20 ? 2 : 3;
+    const hardCount = phase === 'base' || phase === 'build' ? Math.min(g.hardPerWeek, returnCap) : 1;
     for (let k = 0; k < hardCount; k += 1) {
       if (phase === 'base') {
         shape.quality.push(basePick.next('threshold', 'sweetspot'));
