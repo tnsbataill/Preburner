@@ -93,11 +93,12 @@ function DataCard() {
   );
 }
 
-function ModelCard() {
+/** Model fit + best-build analysis of the current history (memoised). */
+function useHistoryAnalysis() {
   const training = useApp((s) => s.training);
   const settings = useApp((s) => s.settings);
   const today = useToday();
-  const analysis = useMemo(() => {
+  return useMemo(() => {
     const snap = trainingSnapshot({ training, settings }, today);
     if (snap.rides.length < 20) return undefined;
     try {
@@ -106,6 +107,11 @@ function ModelCard() {
       return undefined;
     }
   }, [training.stravaRides, training.intervalsRides, settings.profile.ftp, today]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+function ModelCard() {
+  const settings = useApp((s) => s.settings);
+  const analysis = useHistoryAnalysis();
   if (!analysis) return null;
   const k1 = analysis.fit.params.k1;
   const resp = k1 > 1.9 ? 'above typical' : k1 < 1.3 ? 'below typical' : 'typical';
@@ -132,6 +138,9 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
   const [start, setStart] = useState(nextMonday(today));
   const [eventDate, setEventDate] = useState(goals.eventDate ?? addDays(today, 70));
   const [optimize, setOptimize] = useState(true);
+  const analysis = useHistoryAnalysis();
+  const best = analysis?.bestBuilds;
+  const [useBest, setUseBest] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const rides = historyRides(training).length;
@@ -142,7 +151,7 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
     // Let the spinner paint before the (synchronous) optimiser runs.
     setTimeout(() => {
       try {
-        generate({ objective, weeks, start, eventDate: objective === 'event' ? eventDate : undefined, optimize });
+        generate({ objective, weeks, start, eventDate: objective === 'event' ? eventDate : undefined, optimize, useBestBuilds: optimize && useBest && !!best });
         onDone?.();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -192,6 +201,15 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
             </span>
           </span>
         </label>
+        {optimize && best && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ember/40 bg-ember/5 p-3" data-testid="best-builds">
+            <input type="checkbox" className="mt-1" checked={useBest} onChange={(e) => setUseBest(e.target.checked)} />
+            <span>
+              <span className="font-medium">Shape it like your best builds</span>
+              <span className="block text-sm text-muted">{best.summary} Keep that intensity mix instead of the generic one.</span>
+            </span>
+          </label>
+        )}
         <p className="text-xs text-muted">
           Uses your availability ({hours.toFixed(1)} h/week,{' '}
           <button className="underline" onClick={() => navigate('settings', 'section=goals')}>
@@ -375,7 +393,7 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
               label={plan.request.objective === 'event' ? 'Event day' : 'Projected FTP'}
               value={<span className="text-ember">{Math.round(proj.finalFtp.p50)}</span>}
               unit="W"
-              sub={`likely ${Math.round(proj.finalFtp.p10)}–${Math.round(proj.finalFtp.p90)} W`}
+              sub={`80% range ${Math.round(proj.finalFtp.p10)}–${Math.round(proj.finalFtp.p90)} W, if the plan is ridden`}
             />
             <Stat label="Avg week" value={(plan.weeks.reduce((a, w) => a + w.hours, 0) / plan.weeks.length).toFixed(1)} unit="h" sub={`${Math.round(plan.weeks.reduce((a, w) => a + w.plannedTss, 0) / plan.weeks.length)} TSS`} />
             <Stat label="Hard days / week" value={plan.genome.hardPerWeek} sub={`${plan.genome.cadence}:1 load:recovery`} />

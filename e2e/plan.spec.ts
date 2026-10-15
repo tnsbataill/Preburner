@@ -91,10 +91,11 @@ test('a history file (e.g. built from the Strava connector) drives the model and
     const date = new Date(start + d * 86_400_000).toISOString().slice(0, 10);
     const hard = d % 7 === 1 || d % 7 === 3;
     const tss = hard ? 85 : 55;
-    rides.push({ id: `h-${d}`, date, durationMin: hard ? 60 : 90, tss, domain: hard ? { low: 30, mid: 50, high: 5 } : { low: 55, mid: 0, high: 0 }, ftpSet: 280, best20: hard ? 270 : undefined, isTest: d === 30 || d === 200, source: 'strava' });
+    rides.push({ id: `h-${d}`, date, durationMin: hard ? 60 : 90, tss, domain: hard ? { low: 30, mid: 50, high: 5 } : { low: 55, mid: 0, high: 0 }, ftpSet: 280, best20: hard ? 270 : undefined, isTest: d === 29 || d === 120, source: 'strava' });
   }
-  rides.find((r) => r.isTest && r.date < '2025-03-01')!.best20 = 280 / 0.95;
-  rides.filter((r) => r.isTest).at(-1)!.best20 = 300 / 0.95;
+  // FTP rose 280 -> 300 W over 13 weeks of sweet-spot-led training.
+  rides.filter((r) => r.isTest)[0].best20 = 280 / 0.95;
+  rides.filter((r) => r.isTest)[1].best20 = 300 / 0.95;
   const file = info.outputPath('history.json');
   const { writeFileSync } = await import('node:fs');
   writeFileSync(file, JSON.stringify({ rides }));
@@ -104,6 +105,9 @@ test('a history file (e.g. built from the Strava connector) drives the model and
   await page.getByTestId('strava-file').setInputFiles(file);
   await expect(page.getByText(/Strava rides imported/)).toBeVisible();
   await expect(page.getByTestId('model-card')).toContainText('Estimated FTP');
+  // The FTP-raising block in the history is found and offered as the plan shape.
+  await expect(page.getByTestId('best-builds')).toContainText('Your FTP rose 280→300 W');
   await page.getByTestId('generate-plan').click();
   await expect(page.getByTestId('plan-summary')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('plan-summary')).toContainText('80% range');
 });

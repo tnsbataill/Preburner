@@ -3,6 +3,7 @@ import type { DateKey, Weekday } from '../engine/types';
 import { type FitMode, type FitResult, dayLoads, fitModel, perfObservations, stateAtEnd } from './fit';
 import { DEFAULT_GENOME, generatePlan, startLevelFromCtl, weeksUntil } from './generator';
 import type { RideRecord, WellnessRecord } from './history/types';
+import { type BestBuildProfile, bestBuildProfile } from './history/best-builds';
 import { MAX_LEVEL, expectedRpe } from './library';
 import { loadsByDate, performance, pmc } from './model';
 import { type Member, optimizePlan } from './optimize';
@@ -33,6 +34,8 @@ export interface HistoryAnalysis {
   startLevels: Partial<Record<HardKind, number>>;
   /** completed rides with RPE in the last 8 weeks, for transparency */
   rpeSamples: number;
+  /** blocks where FTP rose, and the shape they imply */
+  bestBuilds?: BestBuildProfile;
 }
 
 export function analyzeHistory(snap: AthleteSnapshot, mode: FitMode = 'core', ensemble = 16): HistoryAnalysis {
@@ -67,6 +70,7 @@ export function analyzeHistory(snap: AthleteSnapshot, mode: FitMode = 'core', en
     daysSinceMaxEffort: lastMax ? diffDays(lastMax.date, today) : undefined,
     startLevels,
     rpeSamples: recent.filter((r) => r.rpe !== undefined).length,
+    bestBuilds: bestBuildProfile(rides, obs),
   };
 }
 
@@ -84,6 +88,8 @@ export interface PlanOptions {
   longRideDay?: Weekday;
   /** race dates already on the calendar */
   blockedDates?: DateKey[];
+  /** hold the plan to the shape of the athlete's own FTP-raising builds */
+  useBestBuilds?: boolean;
 }
 
 export function planFromHistory(snap: AthleteSnapshot, opts: PlanOptions, analysis = analyzeHistory(snap, opts.mode ?? 'core')): { plan: TrainingPlan; analysis: HistoryAnalysis; evaluated: number } {
@@ -109,7 +115,7 @@ export function planFromHistory(snap: AthleteSnapshot, opts: PlanOptions, analys
     const plan = generatePlan(req, DEFAULT_GENOME);
     return { plan, analysis, evaluated: 1 };
   }
-  const res = optimizePlan(req, analysis.members);
+  const res = optimizePlan(req, analysis.members, { bounds: opts.useBestBuilds ? analysis.bestBuilds?.bounds : undefined });
   return { plan: res.plan, analysis, evaluated: res.evaluated };
 }
 

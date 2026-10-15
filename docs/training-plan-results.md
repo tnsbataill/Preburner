@@ -42,22 +42,43 @@ Fit on the first 9 months, then predict true FTP over the next 3 (80 riders):
 
 ## 2. Do optimised plans raise FTP more?
 
-12-week FTP plans, 60 riders. Gain is in true FTP.
+12-week FTP plans, 60 riders, gain in true FTP. Current generator:
+
+- at most 2 VO2+ sessions a week;
+- at least 60% easy time;
+- a return-to-training cap while CTL is low.
 
 | Strategy | Mean | Median | p10 | p90 | Beats static |
 | --- | --- | --- | --- | --- | --- |
 | Static template (TrainerRoad-style, week-1 test) | 3.46% | 2.93% | 0.96% | 6.06% | — |
-| Optimised on population priors | 3.20% | 3.30% | 0.13% | 6.40% | 28/60 |
-| **Optimised on the individual fit** | **3.73%** | **3.81%** | 0.94% | 6.40% | **38/60** |
-| Individual fit + daily adaptation | 3.64% | 3.80% | 0.43% | 5.88% | 39/60 |
-| Individual fit + adaptation, no RPE/feel | 3.75% | 3.74% | 0.47% | 6.12% | 40/60 |
+| Optimised on population priors | 3.60% | 3.15% | 0.31% | 7.05% | 31/60 |
+| **Optimised on the individual fit** | **4.09%** | 3.94% | 1.50% | 6.92% | **42/60** |
+| Individual fit + daily adaptation | 4.05% | **4.14%** | 1.30% | 6.12% | 45/60 |
 
-- Optimising on **your fit** beats the template for most riders. Optimising on population priors does not.
-- The evidence-based guards cost some simulated gain:
-  - at most 2 VO2+ sessions a week;
-  - at least 60% of riding time easy.
-  
-  Before the guards, the optimiser beat the template by about 1.7 points, by stacking VO2 work. That reflects an assumption I built into the simulator, so the guards stay: on intensity distribution, the published literature beats my sim.
+- Optimising on **your fit** beats the template for most riders. Optimising on population priors barely does.
+- **History of the guards.**
+  - With a 70% easy-time floor, the individual fit beat the template by only about 0.3 points (3.73% vs 3.46%).
+  - Before any guards, the optimiser won by stacking VO2 work. That reflected an assumption built into the simulator.
+  - The VO2 cap is the main protection. The easy-time floor was lowered to 60%, because the real rider's FTP-raising builds ran about 55–65% easy.
+
+## 4. Real data
+
+The model was fitted to one rider's Strava history (Oct 2022 → Jul 2026), then asked to predict each of 9 later known FTP values (ramp tests and TrainerRoad-implied FTP) from data up to the day before:
+
+| Method | MAPE |
+| --- | --- |
+| Persistence (last test) | 6.9% |
+| Population prior | 5.0% |
+| `scale` | 3.7% |
+| **`core`** | **3.1%** |
+
+This is the first external check, and the individual fit helps. The caveats:
+
+- Only n = 9.
+- Load is computed with an FTP timeline that includes the test values.
+- Rides without power data use calorie-based estimates.
+
+The about 4% error SD is now added to every projection range (`MODEL_ERROR_SD`). Adherence is still not modelled, so ranges remain optimistic.
 
 ## 3. Does daily adaptation (readiness + RPE) help?
 

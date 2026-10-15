@@ -2,6 +2,7 @@ import { addDays, diffDays } from '../engine/time';
 import type { DateKey } from '../engine/types';
 import { DEFAULT_GENOME, generatePlan, planEnd } from './generator';
 import { type ModelParams, type ModelState, performance, step } from './model';
+import type { GenomeBounds } from './history/best-builds';
 import type { Genome, PlanProjection, PlanRequest, TrainingPlan } from './types';
 
 // One-shot plan optimizer. Searches the genome space, scores each candidate
@@ -19,10 +20,15 @@ export interface Member {
 export interface OptimizeOptions {
   /** penalise spread across the ensemble (risk aversion) */
   riskAversion?: number;
+  /** restrict genes, e.g. to the shape of the athlete's own best builds */
+  bounds?: GenomeBounds;
   /** candidate budget for the random phase */
   samples?: number;
   seed?: number;
 }
+
+/** SD of FTP prediction error on real data (see docs/training-plan-results.md). */
+export const MODEL_ERROR_SD = 0.04;
 
 const GENE_VALUES: { [K in keyof Genome]: Array<Genome[K]> } = {
   cadence: [2, 3, 4],
@@ -131,10 +137,22 @@ export function optimizePlan(req: PlanRequest, members: Member[], opts: Optimize
   };
   const keys = Object.keys(GENE_VALUES) as Array<keyof Genome>;
   const allowedRamp = GENE_VALUES.rampPerWeek.filter((r) => r <= req.maxRampPerWeek);
-  const values = { ...GENE_VALUES, rampPerWeek: allowedRamp.length ? allowedRamp : [req.maxRampPerWeek] };
+  const values = { ...GENE_VALUES, rampPerWeek: allowedRamp.length ? allowedRamp : [req.maxRampPerWeek] } as typeof GENE_VALUES;
+  for (const [k, b] of Object.entries(opts.bounds ?? {}) as Array<[keyof Genome, { min?: number; max?: number }]>) {
+    const kept = (values[k] as number[]).filter((v) => (b.min === undefined || v >= b.min - 1e-9) && (b.max === undefined || v <= b.max + 1e-9));
+    if (kept.length) (values as Record<string, number[]>)[k] = kept;
+  }
+  const clampGenome = (g: Genome): Genome => {
+    const out = { ...g };
+    for (const k of keys) {
+      const vs = values[k] as number[];
+      if (!vs.includes(out[k] as number)) (out as Record<string, number>)[k] = vs.reduce((best, v) => (Math.abs(v - (out[k] as number)) < Math.abs(best - (out[k] as number)) ? v : best), vs[0]);
+    }
+    return out;
+  };
 
   // Phase 1: default plus random samples.
-  let best: { g: Genome; v: number } = { g: { ...DEFAULT_GENOME, rampPerWeek: Math.min(DEFAULT_GENOME.rampPerWeek, req.maxRampPerWeek) }, v: -Infinity };
+  let best: { g: Genome; v: number } = { g: clampGenome({ ...DEFAULT_GENOME, rampPerWeek: Math.min(DEFAULT_GENOME.rampPerWeek, req.maxRampPerWeek) }), v: -Infinity };
   best.v = evalGenome(best.g).scored.value;
   for (let i = 0; i < (opts.samples ?? 40); i += 1) {
     const g = Object.fromEntries(keys.map((k) => [k, values[k][Math.floor(rand() * values[k].length)]])) as unknown as Genome;
@@ -159,8 +177,15 @@ export function optimizePlan(req: PlanRequest, members: Member[], opts: Optimize
 
   const winner = evalGenome(best.g);
   const startPerf = members.reduce((s, m) => s + performance(m.s0, m.p), 0) / members.length;
+  // The ensemble only captures uncertainty in the response parameters. Add
+  // model error measured on real data (fit-to-date vs later FTP tests: 3.1%
+  // mean absolute error, ~4% SD) in quadrature. Whether the plan actually
+  // gets ridden isn't in here at all, so this is still optimistic.
+  const p50 = quantile(winner.scored.perfAtTarget, 0.5);
+  const ensSd = (quantile(winner.scored.perfAtTarget, 0.9) - quantile(winner.scored.perfAtTarget, 0.1)) / 2.56;
+  const sd = Math.sqrt(ensSd ** 2 + (MODEL_ERROR_SD * p50) ** 2);
   const projection: PlanProjection = {
-    finalFtp: { p10: quantile(winner.scored.perfAtTarget, 0.1), p50: quantile(winner.scored.perfAtTarget, 0.5), p90: quantile(winner.scored.perfAtTarget, 0.9) },
+    finalFtp: { p10: p50 - 1.28 * sd, p50, p90: p50 + 1.28 * sd },
     startFtp: startPerf,
     daily: winner.scored.daily,
     overloadRisk: winner.scored.minTsb < -30 ? Math.min(1, (-30 - winner.scored.minTsb) / 20) : 0,
