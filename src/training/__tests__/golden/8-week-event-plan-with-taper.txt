@@ -1,0 +1,58 @@
+8-week event plan from 2026-10-19 | FTP 260 | CTL 55 | ramp cap 6/wk
+genome {"cadence":3,"recoveryDepth":0.6,"rampPerWeek":4,"hardPerWeek":2,"vo2Share":0.5,"baseFrac":0.4,"baseThresholdShare":0.3}
+
+W1 2026-10-19 base     target 565 TSS, planned 489 TSS, 9.7 h, 2 hard (availability-limited)
+  Mon 2026-10-19  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-10-20  1h19    TSS  83  IF 0.79  * Sweet spot: 4x10 sweet spot
+  Wed 2026-10-21  1h      TSS  43  IF 0.65    Endurance 1h
+  Thu 2026-10-22  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-10-24  1h55    TSS 123  IF 0.80  * Threshold: 4x10 threshold
+  Sun 2026-10-25  3h      TSS 133  IF 0.67    Long endurance 3h
+W2 2026-10-26 base     target 583 TSS, planned 487 TSS, 9.8 h, 2 hard (availability-limited)
+  Mon 2026-10-26  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-10-27  1h23    TSS  89  IF 0.80  * Sweet spot: 3x15 sweet spot
+  Wed 2026-10-28  1h      TSS  43  IF 0.65    Endurance 1h
+  Thu 2026-10-29  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-10-31  1h55    TSS 114  IF 0.77  * Sweet spot: 3x15 sweet spot
+  Sun 2026-11-01  3h      TSS 133  IF 0.67    Long endurance 3h
+W3 2026-11-02 build    target 597 TSS, planned 473 TSS, 9.6 h, 2 hard (availability-limited)
+  Mon 2026-11-02  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-11-03  1h20    TSS  96  IF 0.85  * VO2max: 5x4 VO2max
+  Wed 2026-11-04  1h      TSS  25  IF 0.50    Recovery spin
+  Thu 2026-11-05  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-11-07  1h45    TSS 112  IF 0.80  * Threshold: 3x12 threshold
+  Sun 2026-11-08  3h      TSS 133  IF 0.67    Long endurance 3h
+W4 2026-11-09 recovery target 358 TSS, planned 359 TSS, 7.6 h, 1 hard
+  Mon 2026-11-09  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-11-10  1h15    TSS  54  IF 0.66    Endurance 1.25h
+  Wed 2026-11-11  1h      TSS  43  IF 0.65    Endurance 1h
+  Thu 2026-11-12  1h      TSS  43  IF 0.65    Endurance 1h
+  Sat 2026-11-14  1h23    TSS  89  IF 0.80  * Sweet spot: 3x15 sweet spot
+  Sun 2026-11-15  2h      TSS  88  IF 0.66    Long endurance 2h
+W5 2026-11-16 build    target 597 TSS, planned 490 TSS, 9.8 h, 2 hard (availability-limited)
+  Mon 2026-11-16  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-11-17  1h30    TSS 110  IF 0.86  * VO2max: 6x4 VO2max
+  Wed 2026-11-18  1h      TSS  25  IF 0.50    Recovery spin
+  Thu 2026-11-19  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-11-21  1h45    TSS 114  IF 0.81  * Over-unders: 4x9 over-unders
+  Sun 2026-11-22  3h      TSS 133  IF 0.67    Long endurance 3h
+W6 2026-11-23 build    target 610 TSS, planned 527 TSS, 9.9 h, 2 hard (availability-limited)
+  Mon 2026-11-23  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-11-24  1h30    TSS 133  IF 0.94  * 30/15s: 4 sets of 13x 30/15s
+  Wed 2026-11-25  1h      TSS  25  IF 0.50    Recovery spin
+  Thu 2026-11-26  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-11-28  1h55    TSS 128  IF 0.82  * Threshold: 3x15 threshold
+  Sun 2026-11-29  3h      TSS 133  IF 0.67    Long endurance 3h
+W7 2026-11-30 taper    target 427 TSS, planned 412 TSS, 8.6 h, 1 hard (availability-limited)
+  Mon 2026-11-30  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-12-01  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Wed 2026-12-02  1h      TSS  43  IF 0.65    Endurance 1h
+  Thu 2026-12-03  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-12-05  1h35    TSS 108  IF 0.83  * VO2max: 5x4 VO2max
+  Sun 2026-12-06  2h      TSS  88  IF 0.66    Long endurance 2h
+W8 2026-12-07 taper    target 274 TSS, planned 269 TSS, 5.6 h, 1 hard
+  Mon 2026-12-07  1h      TSS  43  IF 0.65    Endurance 1h
+  Tue 2026-12-08  1h20    TSS  96  IF 0.85  * VO2max: 5x4 VO2max
+  Wed 2026-12-09  1h      TSS  25  IF 0.50    Recovery spin
+  Thu 2026-12-10  1h30    TSS  65  IF 0.66    Endurance 1.5h
+  Sat 2026-12-12  45m     TSS  40  IF 0.73    Openers

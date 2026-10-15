@@ -23,6 +23,10 @@ export const DEFAULT_GENOME: Genome = {
 };
 
 const CTL_K = 1 - 1 / 42;
+/** Evidence-based intensity limits (TID literature): kept outside the optimiser's reach. */
+export const MAX_HIGH_PER_WEEK = 2;
+/** minimum share of weekly riding time below ~76% FTP */
+export const MIN_LOW_TIME_SHARE = 0.7;
 const MIN_EASY = 45;
 const MIN_LONG = 90;
 const STEP_MIN = 15;
@@ -118,6 +122,20 @@ function slotTss(s: Slot): number {
   return stepMetrics(expandBlocks(built.blocks)).tss;
 }
 
+/** Share of the week's riding time spent below 76% FTP. */
+function lowTimeShare(slots: Array<Slot | undefined>): number {
+  let low = 0;
+  let total = 0;
+  for (const x of slots) {
+    if (!x) continue;
+    for (const st of expandBlocks(buildSession(x.kind, x.minutes, x.level).blocks)) {
+      total += st.durationS;
+      if ((st.lo + st.hi) / 2 < 0.76) low += st.durationS;
+    }
+  }
+  return total ? low / total : 1;
+}
+
 function fitWeek(slots: Array<Slot | undefined>, target: number): { tss: number; limited: boolean } {
   const live = () => slots.filter((s): s is Slot => !!s);
   let tss = live().reduce((t, s) => t + slotTss(s), 0);
@@ -193,7 +211,9 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
       if (phase === 'base') {
         shape.quality.push(basePick.next('threshold', 'sweetspot'));
       } else if (phase === 'build') {
-        const high = buildPick.next('vo2', 'threshold');
+        // Never more than MAX_HIGH_PER_WEEK sessions above threshold in a week.
+        const highSoFar = shape.quality.filter((q) => q === 'vo2' || q === 'anaerobic').length;
+        const high = highSoFar < MAX_HIGH_PER_WEEK ? buildPick.next('vo2', 'threshold') : 'threshold';
         shape.quality.push(high === 'vo2' ? vo2Pick.next('vo2', 'anaerobic') : thrPick.next('threshold', 'overunder'));
       } else {
         // recovery/taper/test weeks keep one short touch of intensity
@@ -216,7 +236,16 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
       const pool = (weekendIdx.length ? weekendIdx : dates.map((_, i) => i)).filter((i) => avail[i] >= MIN_LONG);
       let bestScore = -Infinity;
       for (const i of pool) {
-        const sc = pickHardDays(avail, i, wanted.length, needMin).score + Math.min(avail[i], 240) / 4;
+        // Score with as many hard days as can actually fit around this long day.
+        let hardScore = 0;
+        for (let c = wanted.length; c >= 1; c -= 1) {
+          const r = pickHardDays(avail, i, c, needMin.slice(0, c));
+          if (r.days.length) {
+            hardScore = r.score + 200 * c;
+            break;
+          }
+        }
+        const sc = hardScore + Math.min(avail[i], 240) / 4;
         if (sc > bestScore) {
           bestScore = sc;
           longIdx = i;
@@ -227,9 +256,12 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
 
     const slots: Array<Slot | undefined> = new Array(7).fill(undefined);
     let testIdx = -1;
+    let eventIdx = -1;
     if (shape.final) {
-      // Test/event on the last day with time; openers the day before.
-      for (let i = 6; i >= 0; i -= 1) if (avail[i] >= 60) { testIdx = i; break; }
+      // Test on the last day with time / the event on its date; openers the day before.
+      if (shape.final === 'event' && req.eventDate && dates.includes(req.eventDate)) eventIdx = testIdx = dates.indexOf(req.eventDate);
+      else for (let i = 6; i >= 0; i -= 1) if (avail[i] >= 60) { testIdx = i; break; }
+      if (shape.final === 'event' && testIdx >= 0) eventIdx = testIdx;
       if (testIdx >= 0) {
         if (shape.final === 'ftptest') slots[testIdx] = { kind: 'ftptest', level: 1, minutes: 60, maxMinutes: 60, prio: 9 };
         const opIdx = [testIdx - 1, testIdx - 2].find((i) => i >= 0 && avail[i] >= 45);
@@ -262,7 +294,8 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
       slots[longIdx] = { kind: 'long', level: 1, minutes: Math.min(avail[longIdx], loadWeek ? 120 : MIN_LONG), maxMinutes: loadWeek ? avail[longIdx] : Math.min(avail[longIdx], 120), prio: 1 };
     }
     for (let i = 0; i < 7; i += 1) {
-      if (slots[i] || avail[i] < 30) continue;
+      // Nothing on (or after) event day: the race itself is on the athlete's calendar.
+      if (slots[i] || avail[i] < 30 || (eventIdx >= 0 && i >= eventIdx)) continue;
       // The day before a hard day or the test stays easy and short.
       const beforeHard = slots[i + 1] && slots[i + 1]!.kind !== 'endurance' && slots[i + 1]!.kind !== 'long';
       const afterHard = i > 0 && slots[i - 1] && slots[i - 1]!.prio === 3;
@@ -275,7 +308,21 @@ export function generatePlan(req: PlanRequest, genome: Genome = DEFAULT_GENOME):
       };
     }
 
-    const { tss, limited } = fitWeek(slots, shape.targetTss);
+    let { tss, limited } = fitWeek(slots, shape.targetTss);
+    // Intensity distribution guard: keep most riding time easy. Grow easy
+    // riding into spare time first; if there's none, turn the last hard
+    // session of the week into endurance.
+    for (let guard = 0; guard < 6 && lowTimeShare(slots) < MIN_LOW_TIME_SHARE; guard += 1) {
+      const grow = slots.filter((x): x is Slot => !!x && (x.kind === 'endurance' || x.kind === 'long') && x.minutes + STEP_MIN <= x.maxMinutes).sort((a, b) => a.minutes - b.minutes)[0];
+      if (grow) grow.minutes += STEP_MIN;
+      else {
+        const idx = slots.map((x, i) => (x && x.prio === 3 ? i : -1)).filter((i) => i >= 0).at(-1);
+        if (idx === undefined) break;
+        slots[idx] = { kind: 'endurance', level: 1, minutes: slots[idx]!.minutes, maxMinutes: slots[idx]!.maxMinutes, prio: 2 };
+      }
+      tss = slots.reduce((t, x) => t + (x ? slotTss(x) : 0), 0);
+      limited = limited || !grow;
+    }
 
     // ---- emit ----
     let weekHours = 0;

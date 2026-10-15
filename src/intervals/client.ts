@@ -68,6 +68,15 @@ export interface IcuActivity {
   carbs_ingested?: number;
   paired_event_id?: number;
   trainer?: boolean;
+  icu_weighted_avg_watts?: number;
+  /** modelled FTP from this ride's power curve */
+  icu_pm_ftp?: number;
+  icu_zone_times?: Array<{ id: string; secs: number }>;
+  icu_rpe?: number;
+  /** 1 strong .. 5 weak */
+  feel?: number;
+  source?: string;
+  external_id?: string;
 }
 
 export interface IcuWellness {
@@ -80,6 +89,7 @@ export interface IcuWellness {
   sleepSecs?: number;
   kcalConsumed?: number;
   bodyFat?: number;
+  sleepScore?: number;
 }
 
 export type NewEvent = {
@@ -181,6 +191,11 @@ export class IntervalsClient {
 
   deleteEvent(id: number): Promise<void> {
     return this.request('DELETE', this.a(`/events/${id}`));
+  }
+
+  /** Write RPE / feel back to a completed activity. */
+  updateActivity(id: string, patch: Pick<IcuActivity, 'icu_rpe' | 'feel'>): Promise<IcuActivity> {
+    return this.request('PUT', `/activity/${id}`, patch);
   }
 
   putWellness(date: string, patch: Partial<IcuWellness>): Promise<IcuWellness> {

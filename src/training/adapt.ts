@@ -117,6 +117,8 @@ export interface AdaptInput {
   today: DateKey;
   /** rides on or after this date haven't been reviewed yet (default: yesterday) */
   since?: DateKey;
+  /** ride ids whose RPE has already been applied */
+  reviewed?: string[];
   rides: RideRecord[];
   wellness: WellnessRecord[];
   ftpSet: number;
@@ -217,43 +219,14 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
     }
   }
 
-  // 3. How did it feel? Reported RPE vs what the session should feel like
+  // 3. How did it feel? Reported RPE vs what the session normally feels like
   //    steers the level of upcoming sessions of the same kind.
   const since = input.since ?? addDays(today, -1);
   if (cfg.useRpe && cfg.rpeLevels) {
-    for (const r of input.rides.filter((x) => x.date >= since && x.date < today && x.kind && (x.rpe !== undefined || x.failed))) {
-      const kind = r.kind as SessionKind;
-      if (!(kind in MAX_LEVEL)) continue;
-      const diff = (r.rpe ?? 10) - personalRpe(input.rides, kind, r.level ?? 1, r.date);
-      const feltPoor = (r.feel ?? 0) >= 4;
-      const hk = kind as HardKind;
-      const upcoming = sessions.filter((x) => x.kind === kind && x.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
-      if (!upcoming.length) continue;
-      const clampTo = (u: PlannedSession, lv: number) => {
-        const planned = u.plannedLevel ?? u.level;
-        return Math.max(1, planned - 2, Math.min(MAX_LEVEL[hk], planned + 2, lv));
-      };
-      const setLevel = (u: PlannedSession, lv: number) => {
-        const fit = levelThatFits(hk, clampTo(u, lv), u.durationMin + 15);
-        if (fit && fit !== u.level) sessions = sessions.map((x) => (x === u ? { ...rebuild(u, hk, u.durationMin, fit), plannedLevel: u.plannedLevel ?? u.level } : x));
-      };
-      const done = r.level ?? upcoming[0].level;
-      if (r.failed || (diff >= 2 * cfg.rpeHarder && !feltPoor)) {
-        // Step back: next session one level below what was ridden, the rest -1.
-        setLevel(upcoming[0], done - 1);
-        for (const u of upcoming.slice(1)) setLevel(u, u.level - 1);
-        adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${r.kind} on ${r.date} ${r.failed ? "couldn't hold the targets" : `felt much harder than expected (RPE ${r.rpe})`}: stepping back a level` });
-      } else if (diff >= cfg.rpeHarder) {
-        // Hold: repeat the level instead of progressing.
-        if (upcoming[0].level > done) {
-          setLevel(upcoming[0], done);
-          adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${r.kind} on ${r.date} felt harder than expected (RPE ${r.rpe})${feltPoor ? ' on a poor day' : ''}: repeating the level` });
-        }
-      } else if (diff <= -cfg.rpeEasier && !r.failed && !adjustments.some((a) => a.action === 'ftp')) {
-        // (An FTP raise already makes every session harder; don't double up.)
-        for (const u of upcoming) setLevel(u, u.level + 1);
-        adjustments.push({ date: today, action: 'progress', sessionId: upcoming[0].id, reason: `${r.kind} on ${r.date} felt easy (RPE ${r.rpe}): moving your progression up a level` });
-      }
+    for (const r of input.rides.filter((x) => x.date >= since && x.date < today && x.kind && (x.rpe !== undefined || x.failed) && !input.reviewed?.includes(x.id))) {
+      const res = applyRpe(sessions, input.rides, r, today, cfg, adjustments.some((a) => a.action === 'ftp'));
+      sessions = res.sessions;
+      adjustments.push(...res.adjustments);
     }
   }
 
@@ -300,6 +273,54 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   }
 
   return { plan: { ...input.plan, sessions }, ftpSet, readiness: rd, adjustments, replan };
+}
+
+/**
+ * Apply one ride's reported RPE to the upcoming sessions of the same kind:
+ * felt easy -> progression +1; harder -> repeat the level; much harder or
+ * failed -> step back. Always within ±2 of the originally planned level.
+ */
+export function applyRpe(
+  sessionsIn: PlannedSession[],
+  rides: RideRecord[],
+  r: RideRecord,
+  today: DateKey,
+  cfg: AdaptConfig = DEFAULT_ADAPT,
+  ftpJustRaised = false,
+): { sessions: PlannedSession[]; adjustments: Adjustment[] } {
+  let sessions = sessionsIn;
+  const adjustments: Adjustment[] = [];
+  const kind = r.kind as SessionKind;
+  if (!kind || !(kind in MAX_LEVEL) || (r.rpe === undefined && !r.failed)) return { sessions, adjustments };
+  const diff = (r.rpe ?? 10) - personalRpe(rides, kind, r.level ?? 1, r.date);
+  const feltPoor = (r.feel ?? 0) >= 4;
+  const hk = kind as HardKind;
+  const upcoming = sessions.filter((x) => x.kind === kind && x.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (!upcoming.length) return { sessions, adjustments };
+  const clampTo = (u: PlannedSession, lv: number) => {
+    const planned = u.plannedLevel ?? u.level;
+    return Math.max(1, planned - 2, Math.min(MAX_LEVEL[hk], planned + 2, lv));
+  };
+  const setLevel = (u: PlannedSession, lv: number) => {
+    const fit = levelThatFits(hk, clampTo(u, lv), u.durationMin + 15);
+    if (fit && fit !== u.level) sessions = sessions.map((x) => (x.id === u.id ? { ...rebuild(u, hk, u.durationMin, fit), plannedLevel: u.plannedLevel ?? u.level } : x));
+  };
+  const done = r.level ?? upcoming[0].level;
+  if (r.failed || (diff >= 2 * cfg.rpeHarder && !feltPoor)) {
+    setLevel(upcoming[0], done - 1);
+    for (const u of upcoming.slice(1)) setLevel(u, u.level - 1);
+    adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} ${r.failed ? "couldn't hold the targets" : `felt much harder than usual (RPE ${r.rpe})`}: stepping back a level` });
+  } else if (diff >= cfg.rpeHarder) {
+    if (upcoming[0].level > done) {
+      setLevel(upcoming[0], done);
+      adjustments.push({ date: today, action: 'reduce', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} felt harder than usual (RPE ${r.rpe})${feltPoor ? ' on a poor day' : ''}: repeating the level` });
+    }
+  } else if (diff <= -cfg.rpeEasier && !r.failed && !ftpJustRaised) {
+    // (An FTP raise already makes every session harder; don't double up.)
+    for (const u of upcoming) setLevel(u, u.level + 1);
+    adjustments.push({ date: today, action: 'progress', sessionId: upcoming[0].id, reason: `${kind} on ${r.date} felt easy (RPE ${r.rpe}): moving your progression up a level` });
+  }
+  return { sessions, adjustments };
 }
 
 /** Days since the plan started. */

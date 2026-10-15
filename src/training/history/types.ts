@@ -8,6 +8,8 @@ import type { DomainLoad } from '../types';
 export interface RideRecord {
   id: string;
   date: DateKey;
+  /** local start, minutes after midnight (for de-duplication across sources) */
+  startMin?: number;
   durationMin: number;
   /** TSS against the FTP set at the time */
   tss: number;

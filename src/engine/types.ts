@@ -42,6 +42,8 @@ export interface Workout {
   category?: string;
   completed?: boolean;
   description?: string;
+  /** Intervals external_id, for events Preburner created */
+  externalId?: string;
 }
 
 export interface WeightEntry {

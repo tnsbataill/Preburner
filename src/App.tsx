@@ -1,7 +1,8 @@
-import { Activity, CalendarDays, Flame, MessageSquareText, RefreshCw, Settings as SettingsIcon, Sun } from 'lucide-react';
+import { Activity, CalendarDays, Dumbbell, Flame, MessageSquareText, RefreshCw, Settings as SettingsIcon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CoachPage } from './pages/CoachPage';
 import { FitnessPage } from './pages/FitnessPage';
+import { PlanPage } from './pages/PlanPage';
 import { Onboarding } from './pages/Onboarding';
 import { SettingsPage } from './pages/SettingsPage';
 import { TodayPage } from './pages/TodayPage';
@@ -9,11 +10,12 @@ import { WeekPage } from './pages/WeekPage';
 import { useApp } from './state/store';
 import { cx } from './ui/primitives';
 
-export type Route = 'today' | 'week' | 'fitness' | 'coach' | 'settings';
+export type Route = 'today' | 'week' | 'plan' | 'fitness' | 'coach' | 'settings';
 
 const NAV: Array<{ id: Route; label: string; icon: typeof Sun }> = [
   { id: 'today', label: 'Today', icon: Sun },
   { id: 'week', label: 'Week', icon: CalendarDays },
+  { id: 'plan', label: 'Plan', icon: Dumbbell },
   { id: 'fitness', label: 'Fitness', icon: Activity },
   { id: 'coach', label: 'Coach', icon: MessageSquareText },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -83,6 +85,12 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Adjust the training plan once a day from what actually happened.
+  const adaptTraining = useApp((s) => s.adaptTraining);
+  useEffect(() => {
+    adaptTraining();
+  }, [adaptTraining]);
+
   // Refresh from Intervals on open if the cache is older than 15 minutes.
   useEffect(() => {
     if (mode === 'intervals' && (!lastSync || Date.now() - Date.parse(lastSync) > 15 * 60_000)) void sync();
@@ -92,6 +100,7 @@ export default function App() {
   const page = {
     today: <TodayPage />,
     week: <WeekPage />,
+    plan: <PlanPage />,
     fitness: <FitnessPage />,
     coach: <CoachPage />,
     settings: <SettingsPage />,
@@ -148,7 +157,7 @@ export default function App() {
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-surface/85 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-md justify-around px-2 pt-1.5">
           {NAV.map(({ id, label, icon: Icon }) => (
-            <a key={id} href={`#/${id}`} className={cx('flex w-16 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium', route === id ? 'text-ember' : 'text-muted')}>
+            <a key={id} href={`#/${id}`} className={cx('flex w-14 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium', route === id ? 'text-ember' : 'text-muted')}>
               <Icon size={21} strokeWidth={route === id ? 2.4 : 1.9} />
               {label}
             </a>

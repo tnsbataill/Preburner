@@ -5,6 +5,7 @@ import { buildPlan } from '../engine/plan';
 import { addDays, todayKey } from '../engine/time';
 import type { Workout } from '../engine/types';
 import { useApp } from './store';
+import { mergePlanIntoCalendar } from './training';
 
 export const PLAN_PAST_DAYS = 7;
 export const PLAN_FUTURE_DAYS = 28;
@@ -15,12 +16,16 @@ export function useEffectiveWorkouts(): Workout[] {
   const local = useApp((s) => s.localWorkouts);
   const hidden = useApp((s) => s.hiddenWorkoutIds);
   const overrides = useApp((s) => s.timeOverrides);
+  const training = useApp((s) => s.training);
+  const mode = useApp((s) => s.connection.mode);
+  const ftp = useApp((s) => s.settings.profile.ftp);
+  const today = useToday();
   return useMemo(() => {
     const hiddenSet = new Set(hidden);
-    return [...workouts, ...local]
-      .filter((w) => !hiddenSet.has(w.id))
-      .map((w) => (overrides[w.id] !== undefined ? { ...w, startMin: overrides[w.id] } : w));
-  }, [workouts, local, hidden, overrides]);
+    const base = [...workouts, ...local].filter((w) => !hiddenSet.has(w.id));
+    // A Preburner training plan replaces other planned sessions in its window.
+    return mergePlanIntoCalendar(base, training, today, mode, ftp).map((w) => (overrides[w.id] !== undefined ? { ...w, startMin: overrides[w.id] } : w));
+  }, [workouts, local, hidden, overrides, training, mode, ftp, today]);
 }
 
 export function useToday() {

@@ -1,0 +1,45 @@
+6-week ctl plan from 2026-10-19 | FTP 260 | CTL 35 | ramp cap 6/wk
+genome {"cadence":3,"recoveryDepth":0.6,"rampPerWeek":4,"hardPerWeek":2,"vo2Share":0.5,"baseFrac":0.4,"baseThresholdShare":0.3}
+
+W1 2026-10-19 base     target 425 TSS, planned 338 TSS, 7.3 h, 1 hard (availability-limited)
+  Mon 2026-10-19  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-10-20  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-10-21  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-10-22  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-10-24  1h45    TSS 100  IF 0.76  * Sweet spot: 3x12 sweet spot
+  Sun 2026-10-25  2h30    TSS 110  IF 0.66    Long endurance 2.5h
+W2 2026-10-26 base     target 441 TSS, planned 344 TSS, 7.3 h, 1 hard (availability-limited)
+  Mon 2026-10-26  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-10-27  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-10-28  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-10-29  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-10-31  1h50    TSS 107  IF 0.76  * Sweet spot: 4x10 sweet spot
+  Sun 2026-11-01  2h30    TSS 110  IF 0.66    Long endurance 2.5h
+W3 2026-11-02 build    target 456 TSS, planned 341 TSS, 7 h, 1 hard (availability-limited)
+  Mon 2026-11-02  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-11-03  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-11-04  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-11-05  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-11-07  1h30    TSS 103  IF 0.83  * VO2max: 6x3 VO2max
+  Sun 2026-11-08  2h30    TSS 110  IF 0.66    Long endurance 2.5h
+W4 2026-11-09 recovery target 273 TSS, planned 269 TSS, 5.7 h, 1 hard
+  Mon 2026-11-09  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-11-10  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-11-11  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-11-12  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-11-14  1h14    TSS  76  IF 0.79  * Sweet spot: 3x12 sweet spot
+  Sun 2026-11-15  1h30    TSS  65  IF 0.66    Long endurance 1.5h
+W5 2026-11-16 build    target 465 TSS, planned 345 TSS, 7.1 h, 1 hard (availability-limited)
+  Mon 2026-11-16  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-11-17  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-11-18  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-11-19  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-11-21  1h35    TSS 108  IF 0.83  * VO2max: 5x4 VO2max
+  Sun 2026-11-22  2h30    TSS 110  IF 0.66    Long endurance 2.5h
+W6 2026-11-23 build    target 476 TSS, planned 361 TSS, 7.1 h, 1 hard (availability-limited)
+  Mon 2026-11-23  45m     TSS  32  IF 0.65    Endurance 45m
+  Tue 2026-11-24  45m     TSS  32  IF 0.65    Endurance 45m
+  Wed 2026-11-25  45m     TSS  32  IF 0.65    Endurance 45m
+  Thu 2026-11-26  45m     TSS  32  IF 0.65    Endurance 45m
+  Sat 2026-11-28  1h35    TSS 124  IF 0.89  * 30/15s: 3 sets of 13x 30/15s
+  Sun 2026-11-29  2h30    TSS 110  IF 0.66    Long endurance 2.5h

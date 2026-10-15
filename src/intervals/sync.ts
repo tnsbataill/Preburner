@@ -1,6 +1,8 @@
 import { addDays } from '../engine/time';
 import type { AthleteProfile, DateKey, WeightEntry, WellnessDay, Workout } from '../engine/types';
 import { IntervalsClient } from './client';
+import { activityToRide, wellnessToRecords } from '../training/history/intervals';
+import type { RideRecord, WellnessRecord } from '../training/history/types';
 import { athleteToProfile, mergePlannedAndDone, wellnessToDays } from './mapping';
 
 export interface SyncResult {
@@ -12,7 +14,20 @@ export interface SyncResult {
   log: string[];
 }
 
-export const SYNC_WINDOW = { pastDays: 21, futureDays: 56, wellnessDays: 120 };
+export const SYNC_WINDOW = { pastDays: 21, futureDays: 56, wellnessDays: 120, historyDays: 400 };
+
+/**
+ * Longer history for the training model: a year+ of activities (with RPE,
+ * feel, zone times and modelled FTP) and wellness (HRV, resting HR, sleep).
+ * Strava-sourced activities don't come through the API; those come from the
+ * Strava archive import instead.
+ */
+export async function syncTrainingHistory(client: IntervalsClient, today: DateKey, ftpFallback: number): Promise<{ rides: RideRecord[]; wellness: WellnessRecord[] }> {
+  const oldest = addDays(today, -SYNC_WINDOW.historyDays);
+  const [acts, well] = await Promise.all([client.activities(oldest, today), client.wellness(oldest, today)]);
+  const rides = acts.map((a) => activityToRide(a, ftpFallback)).filter((r): r is RideRecord => !!r);
+  return { rides, wellness: wellnessToRecords(well) };
+}
 
 export async function syncIntervals(client: IntervalsClient, today: DateKey, ftpFallback: number): Promise<SyncResult> {
   const log: string[] = [];

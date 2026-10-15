@@ -141,6 +141,7 @@ export function eventToWorkout(e: IcuEvent, ftpFallback: number): Workout | unde
     carbsPerHourOverride: e.carbs_per_hour || undefined,
     category: e.category,
     description: e.description,
+    externalId: e.external_id,
   };
 }
 
