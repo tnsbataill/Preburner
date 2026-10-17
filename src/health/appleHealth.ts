@@ -52,8 +52,10 @@ type Category = (typeof TYPES)[keyof typeof TYPES];
 const ASLEEP = /^HKCategoryValueSleepAnalysis(Asleep|AsleepUnspecified|AsleepCore|AsleepDeep|AsleepREM)$/;
 
 const decodeXml = (s: string) => s.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const ATTR = new Map<string, RegExp>();
 const attr = (tag: string, name: string) => {
-  const m = new RegExp(`\\s${name}="([^"]*)"`).exec(tag);
+  const re = ATTR.get(name) ?? ATTR.set(name, new RegExp(`\\s${name}="([^"]*)"`)).get(name)!;
+  const m = re.exec(tag);
   return m ? decodeXml(m[1]) : undefined;
 };
 /** "2024-03-01 07:15:22 -0500" -> epoch ms */

@@ -65,12 +65,14 @@ export function readiness(wellness: WellnessRecord[], date: DateKey, tsb: number
   let rhrFlag = false;
   const out: Readiness = { date, level: 'green', tsb, reasons };
   // rMSSD and SDNN are different measures: never mix them in one baseline.
-  // SDNN (Apple Watch) is used only when the window has no rMSSD at all.
-  const kind = [...base, ...last7].some((w) => w.lnRmssd !== undefined) ? 'rmssd' : 'sdnn';
-  const hrvOf = (w: WellnessRecord) => (kind === 'rmssd' ? w.lnRmssd : w.lnSdnn);
-  const baseHrv = base.map(hrvOf).filter((x): x is number => x !== undefined);
-  const hrv7 = last7.map(hrvOf).filter((x): x is number => x !== undefined);
-  if (baseHrv.length >= 20 && hrv7.length >= 3) {
+  // rMSSD (Intervals) when there's enough of it, else SDNN (Apple Watch).
+  const series = (k: 'lnRmssd' | 'lnSdnn') => ({ base: base.map((w) => w[k]).filter((x): x is number => x !== undefined), week: last7.map((w) => w[k]).filter((x): x is number => x !== undefined) });
+  const enough = (x: { base: number[]; week: number[] }) => x.base.length >= 20 && x.week.length >= 3;
+  const rmssd = series('lnRmssd');
+  const sdnn = series('lnSdnn');
+  const kind = enough(rmssd) ? 'rmssd' : enough(sdnn) ? 'sdnn' : undefined;
+  const { base: baseHrv, week: hrv7 } = kind === 'sdnn' ? sdnn : rmssd;
+  if (kind) {
     out.hrvKind = kind;
     const m = mean(baseHrv);
     const s = sd(baseHrv);

@@ -66,7 +66,7 @@ export function AppleHealthImport() {
               Body fat {r.appliedBodyFat.pct}% ({formatDate(r.appliedBodyFat.date)}) is now your profile's body fat. It sets fat-free mass, which the energy-availability floor uses.
             </p>
           )}
-          <p className="mt-2 text-muted">Check that these look right. Intervals values win where both have one; Apple fills the gaps, and its HRV (SDNN) is only used when Intervals has no HRV.</p>
+          <p className="mt-2 text-muted">Check that these look right. Weight: a manual entry, then Apple Health, then Intervals. Resting HR and sleep: Intervals' value when it has one, otherwise Apple's. HRV: readiness uses Intervals' rMSSD when it has enough days, otherwise Apple's SDNN, never both together.</p>
         </div>
       )}
     </div>

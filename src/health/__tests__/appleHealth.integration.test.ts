@@ -128,7 +128,14 @@ describe('readiness with Apple Watch HRV', () => {
     expect(r.reasons).toContain('7-day HRV is below your normal range');
   });
 
-  it('never mixes measures: with any rMSSD in the window, SDNN is ignored', () => {
+  it('a few stray rMSSD days do not switch HRV off: SDNN carries the baseline', () => {
+    const stray = sdnnOnly.map((w, i) => (i % 10 === 0 ? { ...w, lnRmssd: Math.log(80) } : w));
+    const r = readiness(stray, today, 0);
+    expect(r.hrvKind).toBe('sdnn');
+    expect(r.reasons).toContain('7-day HRV is below your normal range');
+  });
+
+  it('never mixes measures: with enough rMSSD, SDNN is ignored', () => {
     const mixed = sdnnOnly.map((w, i) => (i % 2 ? { ...w, lnRmssd: Math.log(80) } : w));
     const r = readiness(mixed, today, 0);
     expect(r.hrvKind).toBe('rmssd');

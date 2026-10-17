@@ -210,7 +210,7 @@ export function runTool(world: CoachWorld, name: string, input: Record<string, u
       const fit = projectFitness({ wellness: world.wellness, workouts: world.workouts, from: addDays(world.today, -28), to: world.today, today: world.today });
       const now = fit.at(-1);
       const recent = world.wellness.filter((w) => w.date >= addDays(world.today, -7));
-      const avg = (k: 'hrv' | 'restingHR' | 'sleepHours') => {
+      const avg = (k: 'hrv' | 'hrvSdnn' | 'restingHR' | 'sleepHours') => {
         const v = recent.map((w) => w[k]).filter((x): x is number => typeof x === 'number');
         return v.length ? r1(v.reduce((a, b) => a + b, 0) / v.length) : null;
       };
@@ -229,7 +229,7 @@ export function runTool(world: CoachWorld, name: string, input: Record<string, u
         },
         fitnessToday: now ? { ctl: r1(now.ctl), atl: r1(now.atl), tsb: r1(now.tsb), rampLast7d: r1(rampRate(fit, world.today) ?? 0) } : null,
         weight: { trendKg: r1(trend.at(-1)?.trend ?? profile.weightKg), observedRateKgPerWeek: observedRate(world.weights) ?? null },
-        recoveryLast7d: { hrv: avg('hrv'), restingHR: avg('restingHR'), sleepHours: avg('sleepHours') },
+        recoveryLast7d: { hrvRmssd: avg('hrv'), hrvSdnnAppleWatch: avg('hrvSdnn'), restingHR: avg('restingHR'), sleepHours: avg('sleepHours') },
         usualTrainingStart: schedule.defaultTrainingMin,
       };
     }
