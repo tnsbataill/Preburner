@@ -3,7 +3,7 @@ import type { DateKey, Weekday } from '../engine/types';
 import { type FitMode, type FitResult, dayLoads, fitModel, perfObservations, stateAtEnd } from './fit';
 import { DEFAULT_GENOME, generatePlan, startLevelFromCtl, weeksUntil } from './generator';
 import type { RideRecord, WellnessRecord } from './history/types';
-import { type BestBuildProfile, bestBuildProfile } from './history/best-builds';
+import { type BestBuildProfile, type GenomeBounds, bestBuildProfile } from './history/best-builds';
 import { MAX_LEVEL, expectedRpe } from './library';
 import { loadsByDate, performance, pmc } from './model';
 import { type Member, optimizePlan } from './optimize';
@@ -36,6 +36,33 @@ export interface HistoryAnalysis {
   rpeSamples: number;
   /** blocks where FTP rose, and the shape they imply */
   bestBuilds?: BestBuildProfile;
+  /** tests and near-maximal efforts the FTP estimate rests on */
+  ftpEvidence: number;
+}
+
+/**
+ * Intensity-mix limits when the athlete's own builds don't say otherwise.
+ * Which intensities a rider responds to can't be learned from typical data
+ * (see docs/training-plan-results.md), so without personal evidence the
+ * optimiser would follow the population prior to an extreme (all-VO2, no
+ * base). Studies comparing intensity distributions find similar FTP gains, so
+ * keep to a conventional base-then-build shape instead, with sweet spot as
+ * well as threshold in the base (threshold packs more load per minute, which
+ * the model rewards without evidence the rider responds better to it).
+ */
+export const CONVENTIONAL_BOUNDS: GenomeBounds = { vo2Share: { max: 0.5 }, baseFrac: { min: 0.4 }, baseThresholdShare: { max: 0.67 } };
+
+/** Both sets of limits at once (the tighter of each). */
+function mergeBounds(a: GenomeBounds, b: GenomeBounds = {}): GenomeBounds {
+  const out: GenomeBounds = { ...a };
+  for (const [k, v] of Object.entries(b) as Array<[keyof GenomeBounds, { min?: number; max?: number }]>) {
+    const cur = out[k] ?? {};
+    out[k] = {
+      min: cur.min === undefined ? v.min : v.min === undefined ? cur.min : Math.max(cur.min, v.min),
+      max: cur.max === undefined ? v.max : v.max === undefined ? cur.max : Math.min(cur.max, v.max),
+    };
+  }
+  return out;
 }
 
 export function analyzeHistory(snap: AthleteSnapshot, mode: FitMode = 'core', ensemble = 16): HistoryAnalysis {
@@ -69,6 +96,7 @@ export function analyzeHistory(snap: AthleteSnapshot, mode: FitMode = 'core', en
     atl: last.atl,
     ftpEstimate,
     daysSinceMaxEffort: lastMax ? diffDays(lastMax.date, today) : undefined,
+    ftpEvidence: obs.filter((o) => o.kind !== 'bound').length,
     startLevels,
     rpeSamples: recent.filter((r) => r.rpe !== undefined).length,
     bestBuilds: bestBuildProfile(rides, obs),
@@ -116,8 +144,9 @@ export function planFromHistory(snap: AthleteSnapshot, opts: PlanOptions, analys
     const plan = generatePlan(req, DEFAULT_GENOME);
     return { plan, analysis, evaluated: 1 };
   }
-  const res = optimizePlan(req, analysis.members, { bounds: opts.useBestBuilds ? analysis.bestBuilds?.bounds : undefined });
-  return { plan: res.plan, analysis, evaluated: res.evaluated };
+  const res = optimizePlan(req, analysis.members, { bounds: mergeBounds(CONVENTIONAL_BOUNDS, opts.useBestBuilds ? analysis.bestBuilds?.bounds : undefined) });
+  const plan = analysis.ftpEvidence ? res.plan : { ...res.plan, projection: res.plan.projection && { ...res.plan.projection, noFtpEvidence: true } };
+  return { plan, analysis, evaluated: res.evaluated };
 }
 
 export { startLevelFromCtl };

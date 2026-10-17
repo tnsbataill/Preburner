@@ -21,7 +21,7 @@ describe('simulation regression', () => {
 
   it('optimised plans on the individual fit beat the static template on true FTP', () => {
     const seeds = Array.from({ length: 10 }, (_, i) => i + 1);
-    const cfg = { weeks: 8, objective: 'ftp' as const };
+    const cfg = { weeks: 12, objective: 'ftp' as const };
     const mean = (name: string) => seeds.reduce((s, seed) => s + runStrategy(seed, STRATEGIES[name], cfg).gain, 0) / seeds.length;
     const stat = mean('static');
     const opt = mean('opt-core');

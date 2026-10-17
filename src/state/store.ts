@@ -205,7 +205,8 @@ export const useApp = create<AppState>()(
         });
         const est = analysis.ftpEstimate;
         const ftpSuggestion =
-          intervals && Math.abs(est - s.settings.profile.ftp) > 0.03 * s.settings.profile.ftp
+          // Only with tests or max efforts behind it; a guess from load alone isn't advice.
+          intervals && analysis.ftpEvidence > 0 && Math.abs(est - s.settings.profile.ftp) > 0.03 * s.settings.profile.ftp
             ? { ftp: est, reason: `Your recent rides put FTP at about ${est} W (Intervals has ${s.settings.profile.ftp} W)`, date: today }
             : undefined;
         set((st) => ({

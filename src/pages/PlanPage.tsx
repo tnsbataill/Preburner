@@ -227,7 +227,10 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
   );
 }
 
+const pct = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}%`;
+
 function ProjectionChart({ plan }: { plan: TrainingPlan }) {
+  const noEvidence = !!plan.projection?.noFtpEvidence;
   const daily = plan.projection?.daily ?? [];
   if (daily.length < 2) return null;
   const W = 600;
@@ -251,16 +254,16 @@ function ProjectionChart({ plan }: { plan: TrainingPlan }) {
       <path d={line(ctls, yc)} fill="none" stroke="rgb(var(--i-endurance))" strokeWidth={1.5} strokeDasharray="4 3" />
       <path d={line(perfs, yp)} fill="none" stroke="rgb(var(--ember))" strokeWidth={2.2} />
       <text x={pad} y={14} className="fill-[rgb(var(--ember))] text-[11px]">
-        Projected FTP (W)
+        {noEvidence ? 'Projected FTP (relative)' : 'Projected FTP (W)'}
       </text>
       <text x={W - pad} y={14} textAnchor="end" className="fill-[rgb(var(--i-endurance))] text-[11px]">
         Fitness (CTL)
       </text>
       <text x={pad - 4} y={yp(perfs[0])} textAnchor="end" dominantBaseline="middle" className="fill-[rgb(var(--muted))] text-[10px]">
-        {Math.round(perfs[0])}
+        {noEvidence ? '' : Math.round(perfs[0])}
       </text>
       <text x={W - pad + 4} y={yp(perfs.at(-1)!)} dominantBaseline="middle" className="fill-[rgb(var(--ember))] text-[10px] font-semibold">
-        {Math.round(perfs.at(-1)!)}
+        {noEvidence ? pct(plan.projection!.finalFtp.p50 / plan.projection!.startFtp - 1) : Math.round(perfs.at(-1)!)}
       </text>
     </svg>
   );
@@ -388,13 +391,26 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
         {training.ftpSuggestion && mode === 'intervals' && <FtpSuggestion />}
         {proj && (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="FTP now" value={Math.round(proj.startFtp)} unit="W" sub={`zones set at ${training.ftp ?? plan.request.ftp} W`} />
-            <Stat
-              label={plan.request.objective === 'event' ? 'Event day' : 'Projected FTP'}
-              value={<span className="text-ember">{Math.round(proj.finalFtp.p50)}</span>}
-              unit="W"
-              sub={`80% range ${Math.round(proj.finalFtp.p10)}–${Math.round(proj.finalFtp.p90)} W, if the plan is ridden`}
-            />
+            {proj.noFtpEvidence ? (
+              <>
+                <Stat label="FTP now" value="?" sub={`no tests or max efforts in your history; the first test sets zones (now ${training.ftp ?? plan.request.ftp} W)`} />
+                <Stat
+                  label={plan.request.objective === 'event' ? 'Event day' : 'Projected change'}
+                  value={<span className="text-ember">{pct(proj.finalFtp.p50 / proj.startFtp - 1)}</span>}
+                  sub={`80% range ${pct(proj.finalFtp.p10 / proj.startFtp - 1)} to ${pct(proj.finalFtp.p90 / proj.startFtp - 1)}, if the plan is ridden`}
+                />
+              </>
+            ) : (
+              <>
+                <Stat label="FTP now" value={Math.round(proj.startFtp)} unit="W" sub={`zones set at ${training.ftp ?? plan.request.ftp} W`} />
+                <Stat
+                  label={plan.request.objective === 'event' ? 'Event day' : 'Projected FTP'}
+                  value={<span className="text-ember">{Math.round(proj.finalFtp.p50)}</span>}
+                  unit="W"
+                  sub={`80% range ${Math.round(proj.finalFtp.p10)}–${Math.round(proj.finalFtp.p90)} W, if the plan is ridden`}
+                />
+              </>
+            )}
             <Stat label="Avg week" value={(plan.weeks.reduce((a, w) => a + w.hours, 0) / plan.weeks.length).toFixed(1)} unit="h" sub={`${Math.round(plan.weeks.reduce((a, w) => a + w.plannedTss, 0) / plan.weeks.length)} TSS`} />
             <Stat label="Hard days / week" value={plan.genome.hardPerWeek} sub={`${plan.genome.cadence}:1 load:recovery`} />
           </div>

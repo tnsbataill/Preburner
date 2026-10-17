@@ -131,10 +131,11 @@ test('"what happened?" after skipped or cut-short sessions changes the plan', as
   await page.goto('/#/today');
   const card = page.getByTestId('debrief-prompt');
   await expect(card).toBeVisible();
-  // The demo athlete didn't ride Tuesday's sweet spot.
-  await expect(card).toContainText('Sweet spot: 2x20 sweet spot · Tue, Nov 3 · skipped');
-  const label = 'Why Sweet spot: 2x20 sweet spot was skipped';
-  await card.getByRole('group', { name: label }).getByRole('button', { name: 'Sick' }).click();
+  // The demo athlete didn't ride Tuesday's quality session.
+  await expect(card).toContainText(/· Tue, Nov 3 · skipped/);
+  const group = card.getByRole('group', { name: /was skipped/ }).first();
+  const label = (await group.getAttribute('aria-label'))!;
+  await group.getByRole('button', { name: 'Sick' }).click();
   await expect(card.getByRole('status')).toContainText('Easy spins for three days');
   // The plan changed: hard days in the next three became easy spins.
   await expect(page.getByTestId('readiness-card')).toContainText(/Getting over illness: easy spin instead of/);
@@ -144,16 +145,17 @@ test('"what happened?" after skipped or cut-short sessions changes the plan', as
   await expect(page.getByRole('group', { name: label! })).toHaveCount(0);
 });
 
-test('a cut-short session answered "couldn\'t hold the targets" steps the next one back', async ({ page }) => {
+test('a cut-short ride is asked about and the answer sticks', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-14T09:00:00') });
   await onboardWithDemo(page);
   await generate(page);
-  await page.clock.setSystemTime(new Date('2026-10-25T09:00:00'));
+  await page.clock.setSystemTime(new Date('2026-10-28T09:00:00'));
   await page.reload();
   await page.goto('/#/today');
   const card = page.getByTestId('debrief-prompt');
-  await expect(card).toContainText('Sweet spot: 2x30 sweet spot · Sat, Oct 24 · 1h23 of 1h50');
-  await card.getByRole('group', { name: /was cut short/ }).getByRole('button', { name: "Couldn't hold the targets" }).click();
-  await expect(card.getByRole('status')).toContainText('the next one steps back');
-  await expect(page.getByTestId('readiness-card')).toContainText(/sweetspot .*couldn't hold/);
+  await expect(card).toContainText('Long endurance 3h · Sun, Oct 25 · 2h15 of 3h');
+  await card.getByRole('group', { name: /was cut short/ }).getByRole('button', { name: 'Ran out of time' }).click();
+  await expect(card.getByRole('status')).toContainText('No change to your plan.');
+  await page.reload();
+  await expect(page.getByRole('group', { name: /Long endurance 3h was cut short/ })).toHaveCount(0);
 });

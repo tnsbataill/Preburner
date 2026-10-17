@@ -132,4 +132,7 @@ export interface PlanProjection {
   /** probability any week enters overload in the model ensemble */
   overloadRisk: number;
   objectiveValue: number;
+  /** no test or near-maximal effort in the history: watts are the model's
+   *  guess, only the relative change means anything */
+  noFtpEvidence?: boolean;
 }

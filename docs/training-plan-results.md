@@ -52,14 +52,15 @@ Fit on the first 9 months, then predict true FTP over the next 3 (80 riders):
 | Strategy | Mean | Median | p10 | p90 | Beats static |
 | --- | --- | --- | --- | --- | --- |
 | Static template (TrainerRoad-style, week-1 test) | 3.46% | 2.93% | 0.96% | 6.06% | — |
-| Optimised on population priors | 3.60% | 3.15% | 0.31% | 7.05% | 31/60 |
-| **Optimised on the individual fit** | **4.09%** | 3.94% | 1.50% | 6.92% | **42/60** |
-| Individual fit + daily adaptation | 4.05% | **4.14%** | 1.30% | 6.12% | 45/60 |
+| Optimised on population priors | 3.79% | 3.69% | 0.31% | 7.05% | 31/60 |
+| **Optimised on the individual fit** | **4.24%** | **4.21%** | 1.09% | 7.04% | 44/60 |
+| Individual fit + daily adaptation | 4.23% | 4.05% | 1.30% | 6.90% | **46/60** |
 
 - Optimising on **your fit** beats the template for most riders. Optimising on population priors barely does.
 - **History of the guards.**
   - With a 70% easy-time floor, the individual fit beat the template by only about 0.3 points (3.73% vs 3.46%).
   - Before any guards, the optimiser won by stacking VO2 work. That reflected an assumption built into the simulator.
+  - **Conventional limits on the intensity mix** (`CONVENTIONAL_BOUNDS`): at most half the build's hard days VO2, at least 40% of the plan as base, and sweet spot as well as threshold in the base. Without them, an athlete with no usable history got an all-VO2, no-base plan from CTL 0, purely from the population prior's slightly higher weight on high intensity. With them, 12-week results improved (4.09% → 4.24%). On 8-week plans they cost a little (3.40% → 3.23%, 40 riders), still ahead of the template (2.78%). An athlete's own best builds tighten these further.
   - The VO2 cap is the main protection. The easy-time floor was lowered to 60%, because the real rider's FTP-raising builds ran about 55–65% easy.
 
 ## 4. Real data
