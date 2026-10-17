@@ -129,3 +129,20 @@ test('an Apple Health export is imported: report, body fat into the profile, kep
   await page.reload();
   await expect(page.getByTestId('apple-health-report')).toContainText('Body fat 17%');
 });
+
+test('structured workouts show a power-profile preview', async ({ page }) => {
+  await onboardWithDemo(page);
+  // Demo indoor sessions carry steps; find a day that has one.
+  const strip = page.locator('[data-selected]');
+  const n = await strip.count();
+  for (let i = 0; i < n; i += 1) {
+    await strip.nth(i).click();
+    if ((await page.getByTestId('workout-profile').count()) > 0) break;
+  }
+  const profile = page.getByTestId('workout-profile').first();
+  await expect(profile).toBeVisible();
+  await expect(profile).toHaveAttribute('aria-label', /Workout profile: \d+ min.*peak \d+% FTP/);
+  // Drawn as one block per step.
+  expect(await profile.locator('polygon').count()).toBeGreaterThan(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

@@ -5,6 +5,7 @@ import { AdjustmentRow, DebriefPrompt, FeedbackPrompt, NoDataNotice, ReadinessCa
 import { addDays, diffDays, formatDate, formatDuration, weekStartOf, weekdayOf, weekdayShort } from '../engine/time';
 import { useApp } from '../state/store';
 import { trainingSnapshot } from '../state/store';
+import { WorkoutProfile } from '../components/WorkoutProfile';
 import { historyRides, trainingWellness } from '../state/training';
 import { useToday } from '../state/usePlan';
 import { analyzeHistory } from '../training/planner';
@@ -375,16 +376,18 @@ function SessionRow({ s, today }: { s: PlannedSession; today: string }) {
         </span>
         <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: KIND_COLOR[s.kind] }} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{s.title}</span>
+          <span className="line-clamp-2 block text-sm font-medium">{s.title}</span>
           <span className="num block text-[11px] text-muted">
             {formatDuration(s.durationMin)} · {s.tss} TSS · IF {s.ifactor.toFixed(2)}
             {s.plannedLevel !== undefined && s.plannedLevel !== s.level && <span className="text-ember"> · adjusted</span>}
           </span>
         </span>
+        <WorkoutProfile steps={s.steps} ftpLine={false} className="h-7 w-14 shrink-0 sm:w-24" />
         <ChevronDown size={16} className={cx('shrink-0 text-muted transition', open && 'rotate-180')} />
       </button>
       {open && (
         <div className="border-t border-line/70 p-3 text-sm">
+          <WorkoutProfile steps={s.steps} className="mb-3 h-14 w-full rounded-md" />
           <p className="text-muted">{s.purpose}</p>
           <pre className="num mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-raised/70 p-2 text-[11px] leading-relaxed">{s.structure}</pre>
         </div>

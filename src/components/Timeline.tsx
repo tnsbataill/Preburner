@@ -8,6 +8,7 @@ import type { ResolvedWorkout } from '../engine/scheduler';
 import { useApp } from '../state/store';
 import { INTENSITY_COLOR, SLOT_ACCENT } from '../ui/format';
 import { Chip, cx } from '../ui/primitives';
+import { WorkoutProfile } from './WorkoutProfile';
 import { WorkoutTimeSheet } from './WorkoutTimeSheet';
 
 export const slotKey = (date: string, s: MealSlot) => `${date}|${s.kind}|${s.startMin}`;
@@ -42,27 +43,6 @@ const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
 function ExpandHint({ open }: { open: boolean }) {
   return <ChevronDown size={16} className={cx('shrink-0 text-faint transition group-hover:text-muted', open && 'rotate-180')} aria-hidden />;
-}
-
-/** Tiny power profile from structured steps. */
-function StepProfile({ workout, color }: { workout: ResolvedWorkout; color: string }) {
-  const steps = workout.steps;
-  if (!steps?.length) return null;
-  const total = steps.reduce((t, x) => t + x.durationS, 0);
-  const max = Math.max(1.2, ...steps.map((x) => x.hi));
-  let x = 0;
-  return (
-    <svg viewBox="0 0 300 48" className="h-12 w-full" preserveAspectRatio="none" aria-label="Workout power profile">
-      {steps.map((st, i) => {
-        const w = (st.durationS / total) * 300;
-        const h = (((st.lo + st.hi) / 2) / max) * 46;
-        const r = <rect key={i} x={x} y={48 - h} width={Math.max(0.5, w - 0.5)} height={h} fill={color} opacity={0.25 + 0.6 * Math.min(1, (st.lo + st.hi) / 2 / 1.05)} />;
-        x += w;
-        return r;
-      })}
-      <line x1={0} x2={300} y1={48 - (1 / max) * 46} y2={48 - (1 / max) * 46} stroke="rgb(var(--ink))" strokeOpacity={0.3} strokeDasharray="3 3" />
-    </svg>
-  );
 }
 
 function MacroPills({ m, kcal }: { m: MealSlot['macros']; kcal: number }) {
@@ -321,6 +301,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
           <span>{workout.kj} kJ</span>
           <span>load {workout.load}</span>
         </div>
+        <WorkoutProfile steps={workout.steps} className="mt-3 h-10 w-full rounded-md" />
         {workout.timeAssumed && !workout.completed && (
           <button onClick={(e) => (stop(e), setEditing(true))} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-warn/50 px-2 py-1 text-xs text-warn hover:bg-warn/10">
             <Clock size={12} /> Time assumed — set the real start
@@ -370,7 +351,6 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
               </p>
             )}
             <p className="text-sm text-muted">{slot.rationale}</p>
-            <StepProfile workout={workout} color={color} />
             {description && <p className="line-clamp-4 text-xs text-faint">{description}</p>}
             <div className="flex flex-wrap items-center" onClick={stop}>
               {!workout.timeAssumed && !workout.completed && (
