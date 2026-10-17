@@ -52,15 +52,21 @@ export interface HistoryAnalysis {
  */
 export const CONVENTIONAL_BOUNDS: GenomeBounds = { vo2Share: { max: 0.5 }, baseFrac: { min: 0.4 }, baseThresholdShare: { max: 0.67 } };
 
-/** Both sets of limits at once (the tighter of each). */
-function mergeBounds(a: GenomeBounds, b: GenomeBounds = {}): GenomeBounds {
+/**
+ * The tighter of each bound. Where `b` lies outside `a` (the base) altogether,
+ * `a` wins and the gene sits at its edge nearest `b`.
+ */
+export function mergeBounds(a: GenomeBounds, b: GenomeBounds = {}): GenomeBounds {
   const out: GenomeBounds = { ...a };
   for (const [k, v] of Object.entries(b) as Array<[keyof GenomeBounds, { min?: number; max?: number }]>) {
     const cur = out[k] ?? {};
-    out[k] = {
-      min: cur.min === undefined ? v.min : v.min === undefined ? cur.min : Math.max(cur.min, v.min),
-      max: cur.max === undefined ? v.max : v.max === undefined ? cur.max : Math.min(cur.max, v.max),
-    };
+    if (cur.min !== undefined && v.max !== undefined && v.max < cur.min - 1e-9) out[k] = { min: cur.min, max: cur.min };
+    else if (cur.max !== undefined && v.min !== undefined && v.min > cur.max + 1e-9) out[k] = { min: cur.max, max: cur.max };
+    else
+      out[k] = {
+        min: cur.min === undefined ? v.min : v.min === undefined ? cur.min : Math.max(cur.min, v.min),
+        max: cur.max === undefined ? v.max : v.max === undefined ? cur.max : Math.min(cur.max, v.max),
+      };
   }
   return out;
 }

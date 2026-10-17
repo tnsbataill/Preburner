@@ -35,6 +35,9 @@ export interface RideRecord {
   level?: number;
   /** planned session this ride executed */
   plannedId?: string;
+  /** load estimated from summary numbers (kcal, average power, HR), not a power stream:
+   * fine for summed load, too coarse to say what kind of session it was */
+  estimated?: boolean;
   /** recorded, but only reached Intervals via Strava, whose data the API won't share */
   noData?: boolean;
   /** load filled in from the planned session (the ride itself had no data) */

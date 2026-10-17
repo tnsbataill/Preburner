@@ -61,7 +61,7 @@ Fit on the first 9 months, then predict true FTP over the next 3 (80 riders):
   - With a 70% easy-time floor, the individual fit beat the template by only about 0.3 points (3.73% vs 3.46%).
   - Before any guards, the optimiser won by stacking VO2 work. That reflected an assumption built into the simulator.
   - **Conventional limits on the intensity mix** (`CONVENTIONAL_BOUNDS`): at most half the build's hard days VO2, at least 40% of the plan as base, and sweet spot as well as threshold in the base. Without them, an athlete with no usable history got an all-VO2, no-base plan from CTL 0, purely from the population prior's slightly higher weight on high intensity. With them, 12-week results improved (4.09% → 4.24%). On 8-week plans they cost a little (3.40% → 3.23%, 40 riders), still ahead of the template (2.78%). An athlete's own best builds tighten these further.
-  - The VO2 cap is the main protection. The easy-time floor was lowered to 60%, because the real rider's FTP-raising builds ran about 55–65% easy.
+  - The VO2 cap is the main protection. The easy-time floor was lowered to 60% from 70%. The real rider's FTP-raising builds, measured over all their riding, ran 71–78% easy by time at only 4.5–5.6 h/week, so the floor isn't what limits intensity.
 
 ## 4. Real data
 
@@ -70,15 +70,26 @@ The model was fitted to one rider's Strava history (Oct 2022 → Jul 2026), then
 | Method | MAPE |
 | --- | --- |
 | Persistence (last test) | 6.9% |
-| Population prior | 5.0% |
-| `scale` | 3.7% |
+| Population prior | 4.3% |
+| `scale` | 3.5% |
 | **`core`** | **3.1%** |
 
 This is the first external check, and the individual fit helps. The caveats:
 
 - Only n = 9.
 - Load is computed with an FTP timeline that includes the test values.
-- Rides without power data use calorie-based estimates.
+- 130 rides have a power stream (every ride with power in the two FTP-raising builds; 10–15 s for most). The other 275 are estimated from Strava's kcal (≈ kJ of work), with a variability index and domain split calibrated on the streamed rides of the same kind (indoor, Zwift, outdoor). They're flagged `estimated`.
+
+**How load is measured matters more than the fit.** Before the streams, every ride without one used a fixed calorie rule. Against 10 s streams for 26 outdoor and Zwift rides, that rule put 79% of the load at endurance intensity (under 76% FTP) and 1% above threshold; the streams said 40% and 28%. 60 evenly spaced samples per ride were close for steady indoor sessions (NP within 0.4%) but overstated outdoor intensity (38% above threshold) and let a single sprint or power-meter spike weigh a whole minute. Streams are now point-sampled at 10–15 s, median-filtered over 3 samples (drops lone spikes), and 30 s rolling before NP and the domain split, as planned workouts are. The fit barely moved (`core` 3.1% either way), but what the history says about the intensity mix changed completely.
+
+**Best builds now count sessions, not load.** The old rule turned the share of hard load above threshold into a VO2-day share with a fixed factor (a VO2 day ≈ 40% above threshold). Planned VO2 sessions actually put about 96% of their above-endurance load there, and sweet-spot, threshold and over-under sessions about 0%. With real streams, the old rule read this rider's builds as "VO2 heavy" and lifted the VO2 limit to 100%. Best builds now classify each measured ride the way the genome counts days: hard is at least 30 TSS above endurance, and VO2 is when most of it is above threshold. Tests and estimated rides don't count. The rider's two builds:
+
+| Build | Hard sessions/wk | VO2 share of hard | VO2 regular from |
+| --- | --- | --- | --- |
+| First build, 23 wk | 1.6 | 43% | week 3 |
+| Second build, 16 wk | 2.3 | 21% | week 8 |
+
+Left a range, the optimiser goes to whichever end the population prior prefers (more VO2), so best builds pin VO2 share and base length to the gene step nearest what worked (FTP-gain weighted: 25% VO2, base 20% → held at the conventional 40%). Where a best build falls outside the conventional limits, the plan sits at the nearest conventional edge (previously a clash dropped the limits altogether).
 
 The about 4% error SD is now added to every projection range (`MODEL_ERROR_SD`). Adherence is still not modelled, so ranges remain optimistic.
 

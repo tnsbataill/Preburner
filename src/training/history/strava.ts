@@ -285,6 +285,7 @@ export function toRideRecords(acts: ArchiveActivity[], fallbackFtp: number): Rid
     const ftpSet = a.deviceFtp ?? ftpAt(a.date);
     let tss: number;
     let domain: RideRecord['domain'];
+    const estimated = !a.summary?.hasPower;
     if (a.summary?.hasPower) ({ tss, domain } = loadFor(a.summary, ftpSet));
     else if (a.csvWeightedPower && a.csvWeightedPower > 0) {
       const ifactor = a.csvWeightedPower / ftpSet;
@@ -305,6 +306,7 @@ export function toRideRecords(acts: ArchiveActivity[], fallbackFtp: number): Rid
       best60: b[3600],
       isTest: /\b(ftp|ramp)\s*test\b|\b20\s*min(ute)?\s*test\b/i.test(a.name ?? ''),
       rpe: a.rpe,
+      ...(estimated && { estimated: true }),
       source: 'strava' as const,
     };
   });
