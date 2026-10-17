@@ -26,6 +26,15 @@
         "--strictPort"
       ],
       "port": 5176
+    },
+    {
+      "name": "preburner-lan",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "lan"
+      ],
+      "port": 4173
     }
   ]
 }
