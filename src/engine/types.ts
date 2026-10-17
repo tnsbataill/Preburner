@@ -49,7 +49,7 @@ export interface Workout {
 export interface WeightEntry {
   date: DateKey;
   kg: number;
-  source: 'manual' | 'intervals' | 'apple-health';
+  source: 'manual' | 'intervals' | 'apple-health' | 'demo';
 }
 
 export interface WellnessDay {

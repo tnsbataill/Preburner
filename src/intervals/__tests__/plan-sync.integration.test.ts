@@ -18,6 +18,9 @@ class FakeIntervals {
     { id: 2, start_date_local: `${d(20)}T08:00:00`, category: 'RACE_B', type: 'Ride', name: 'Gran Fondo', moving_time: 14400, icu_training_load: 260 },
   ];
   nextId = 100;
+  /** what the athlete changes in Intervals between syncs */
+  rideFtp = 305;
+  weightToday?: number;
   activityPuts: Array<{ id: string; body: unknown }> = [];
   log: string[] = [];
   activities = Array.from({ length: 120 }, (_, i) => {
@@ -47,7 +50,8 @@ class FakeIntervals {
     const method = init?.method ?? 'GET';
     this.log.push(`${method} ${p}`);
     const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
-    if (p.endsWith('/athlete/0') || p.endsWith('/athlete/i123456')) return json({ ...rec.athlete, timezone: TZ });
+    if (p.endsWith('/athlete/0') || p.endsWith('/athlete/i123456'))
+      return json({ ...rec.athlete, timezone: TZ, ...(this.weightToday && { icu_weight: this.weightToday }), sportSettings: rec.athlete.sportSettings.map((x) => (x.types.includes('Ride') ? { ...x, ftp: this.rideFtp } : x)) });
     if (p.endsWith('/events.json')) return json(this.events);
     if (p.endsWith('/events/bulk') && method === 'POST') {
       for (const e of JSON.parse(String(init!.body)) as IcuEvent[]) {
@@ -68,7 +72,11 @@ class FakeIntervals {
       this.activityPuts.push({ id: act[1], body: JSON.parse(String(init!.body)) });
       return json({});
     }
-    if (p.endsWith('/wellness.json')) return json(Array.from({ length: 90 }, (_, i) => ({ id: d(-90 + i), ctl: 60, atl: 62, hrv: 60 + (i % 5), restingHR: 48 + (i % 3) })));
+    if (p.endsWith('/wellness.json'))
+      return json([
+        ...Array.from({ length: 90 }, (_, i) => ({ id: d(-90 + i), ctl: 60, atl: 62, hrv: 60 + (i % 5), restingHR: 48 + (i % 3) })),
+        ...(this.weightToday ? [{ id: today, weight: this.weightToday }] : []),
+      ]);
     return new Response('not found', { status: 404 });
   };
   planEvents() {
@@ -169,5 +177,23 @@ describe('training plan <-> Intervals.icu', () => {
     expect(fake.planEvents().filter((e) => e.start_date_local.slice(0, 10) >= today)).toHaveLength(0);
     expect(fake.events.map((e) => e.name)).toEqual(expect.arrayContaining(['TR Threshold 3x12', 'Gran Fondo']));
     expect(useApp.getState().training.plan).toBeUndefined();
+  });
+
+  it('FTP and weight changed in Intervals reach the app, and the plan, on the next sync', async () => {
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    expect(useApp.getState().training.ftp).toBe(305);
+    fake.rideFtp = 292;
+    fake.weightToday = 76.4;
+    // Connecting from demo mode, with an old-style demo weigh-in labelled "manual".
+    useApp.setState((st) => ({ connection: { ...st.connection, mode: 'demo' }, weights: [{ date: d(-3), kg: 99, source: 'manual' }] }));
+    await useApp.getState().sync();
+    const s = useApp.getState();
+    expect(s.settings.profile.ftp).toBe(292);
+    // Same day: the plan's working FTP follows without waiting for tomorrow's adaptation.
+    expect(s.training.ftp).toBe(292);
+    expect(s.settings.profile.weightKg).toBe(76.4);
+    expect(s.weights.find((w) => w.date === today)).toMatchObject({ kg: 76.4, source: 'intervals' });
+    // The demo's made-up weigh-ins never survive into a connected app.
+    expect(s.weights.some((w) => w.source === 'demo' || w.kg === 99)).toBe(false);
   });
 });

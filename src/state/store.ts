@@ -176,9 +176,14 @@ export const useApp = create<AppState>()(
             syncing: false,
             workouts: res.workouts,
             wellness: res.wellness,
-            // keep manual weigh-ins, replace synced ones
-            weights: [...s.weights.filter((w) => w.source === 'manual'), ...res.weights].sort((a, b) => (a.date < b.date ? -1 : 1)),
+            // Keep manual weigh-ins and replace synced ones. Coming from demo
+            // mode, everything there was made up (older demo data was even
+            // labelled "manual"), so only Intervals' weights remain.
+            weights: [...(s.connection.mode === 'demo' ? [] : s.weights.filter((w) => w.source === 'manual')), ...res.weights].sort((a, b) => (a.date < b.date ? -1 : 1)),
             settings: { ...s.settings, profile: { ...s.settings.profile, ...stripUndefined(res.profile) } },
+            // Intervals resolves %FTP against its own FTP, so the plan's working
+            // FTP follows it as soon as it changes, not at the next daily adaptation.
+            ...(res.profile.ftp ? { training: { ...s.training, ftp: res.profile.ftp } } : {}),
             connection: { ...s.connection, mode: 'intervals', athleteId: res.athleteId, lastSync: new Date().toISOString(), syncError: undefined, syncLog: res.log },
           }));
           // Longer history for the training model; failure here is non-fatal.

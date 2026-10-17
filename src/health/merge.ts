@@ -42,7 +42,7 @@ export function withHealthRecords(records: WellnessRecord[], health?: AppleHealt
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-const RANK: Record<WeightEntry['source'], number> = { manual: 0, 'apple-health': 1, intervals: 2 };
+const RANK: Record<WeightEntry['source'], number> = { manual: 0, 'apple-health': 1, intervals: 2, demo: 3 };
 
 /** One weight per day for the trend: manual > Apple Health > Intervals. */
 export function withHealthWeights(weights: WeightEntry[], health?: AppleHealthData): WeightEntry[] {

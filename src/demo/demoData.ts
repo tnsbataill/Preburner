@@ -61,7 +61,7 @@ export function demoWeights(today: DateKey, startKg: number): WeightEntry[] {
   const out: WeightEntry[] = [];
   for (let i = 42; i >= 0; i -= 1) {
     const noise = Math.sin(i * 1.7) * 0.35 + Math.cos(i * 0.9) * 0.2;
-    out.push({ date: addDays(today, -i), kg: Math.round((startKg + i * 0.045 + noise) * 10) / 10, source: 'manual' });
+    out.push({ date: addDays(today, -i), kg: Math.round((startKg + i * 0.045 + noise) * 10) / 10, source: 'demo' });
   }
   return out;
 }

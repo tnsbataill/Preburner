@@ -97,6 +97,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  // An installed app on a phone is resumed, not reopened: refresh FTP, weight
+  // and the calendar when it comes back to the foreground with stale data,
+  // and run the daily adaptation if the day has turned over.
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState !== 'visible') return;
+      const s = useApp.getState();
+      const stale = !s.connection.lastSync || Date.now() - Date.parse(s.connection.lastSync) > 15 * 60_000;
+      if (s.connection.mode === 'intervals' && stale && !s.syncing) void s.sync();
+      else s.adaptTraining();
+    };
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
+  }, []);
+
   const page = {
     today: <TodayPage />,
     week: <WeekPage />,
