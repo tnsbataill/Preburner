@@ -10,7 +10,7 @@ import { useToday } from '../state/usePlan';
 import { analyzeHistory } from '../training/planner';
 import { planEnd } from '../training/generator';
 import type { Objective, PlanWeek, PlannedSession, SessionKind, TrainingPlan } from '../training/types';
-import { Button, Card, Chip, ConfirmButton, cx, SectionTitle, Segmented, Stat } from '../ui/primitives';
+import { Button, Card, Chip, ConfirmButton, cx, inputCls, SectionTitle, Segmented, Stat } from '../ui/primitives';
 
 const KIND_COLOR: Record<SessionKind, string> = {
   recovery: 'rgb(var(--i-recovery))',
@@ -172,12 +172,12 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
           {objective === 'event' ? (
             <label className="block">
               <span className="label mb-1.5 block">Event date</span>
-              <input type="date" className="input" value={eventDate} min={addDays(start, 21)} onChange={(e) => setEventDate(e.target.value)} />
+              <input type="date" className={cx(inputCls, 'num min-h-[2.5rem]')} value={eventDate} min={addDays(start, 21)} onChange={(e) => setEventDate(e.target.value)} />
             </label>
           ) : (
             <label className="block">
               <span className="label mb-1.5 block">Length</span>
-              <select className="input" value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} aria-label="Plan length in weeks">
+              <select className={cx(inputCls, 'num min-h-[2.5rem]')} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} aria-label="Plan length in weeks">
                 {DURATIONS.map((w) => (
                   <option key={w} value={w}>
                     {w} weeks
@@ -188,7 +188,7 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
           )}
           <label className="block">
             <span className="label mb-1.5 block">Start</span>
-            <input type="date" className="input" value={start} min={today} onChange={(e) => setStart(e.target.value)} />
+            <input type="date" className={cx(inputCls, 'num min-h-[2.5rem]')} value={start} min={today} onChange={(e) => setStart(e.target.value)} />
           </label>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-3">
