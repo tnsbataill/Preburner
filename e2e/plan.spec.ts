@@ -74,8 +74,16 @@ test('discarding the plan brings the original calendar back', async ({ page }) =
   await onboardWithDemo(page);
   await generate(page);
   await page.getByTestId('apply-plan').click();
-  page.once('dialog', (d) => void d.accept());
-  await page.getByRole('button', { name: 'Discard' }).click();
+  // Confirmed in the page, not with a native dialog (some browsers suppress those).
+  page.on('dialog', () => {
+    throw new Error('native dialog shown');
+  });
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(page.getByTestId('plan-summary')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByTestId('plan-summary')).toBeVisible();
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard plan' }).click();
   await expect(page.getByTestId('generate-plan')).toBeVisible();
   await page.goto('/#/week');
   await page.getByRole('button', { name: 'Next week' }).click();

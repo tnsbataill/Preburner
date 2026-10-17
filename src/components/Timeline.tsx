@@ -243,11 +243,10 @@ function CalculateMeal({ slotKeyId, slot }: { slotKeyId: string; slot: MealSlot 
 function SendFuelToIntervals({ workout, carbPerHour }: { workout: ResolvedWorkout; carbPerHour: number }) {
   const conn = useApp((s) => s.connection);
   const sync = useApp((s) => s.sync);
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'asking' | 'sending' | 'sent' | 'error'>('idle');
   const eventId = workout.id.startsWith('icu-') ? Number(workout.id.slice(4)) : undefined;
   if (conn.mode !== 'intervals' || !conn.intervalsKey || !eventId || workout.completed || workout.carbsPerHourOverride === carbPerHour) return null;
   const send = async () => {
-    if (!confirm(`Set carbs/hour on "${workout.title}" in Intervals.icu to ${carbPerHour} g/h?`)) return;
     setState('sending');
     try {
       await new IntervalsClient(conn.intervalsKey!, conn.athleteId).updateEvent(eventId, { carbs_per_hour: carbPerHour });
@@ -257,8 +256,20 @@ function SendFuelToIntervals({ workout, carbPerHour }: { workout: ResolvedWorkou
       setState('error');
     }
   };
+  if (state === 'asking')
+    return (
+      <span className="ml-3 inline-flex items-center gap-2 text-xs text-muted">
+        Set {carbPerHour} g/h on Intervals?
+        <button onClick={() => void send()} className="font-medium text-ember hover:underline">
+          Send
+        </button>
+        <button onClick={() => setState('idle')} className="hover:text-ink">
+          Cancel
+        </button>
+      </span>
+    );
   return (
-    <button onClick={() => void send()} disabled={state === 'sending' || state === 'sent'} className="ml-3 inline-flex items-center gap-1 text-xs text-muted hover:text-ink disabled:opacity-60">
+    <button onClick={() => setState('asking')} disabled={state === 'sending' || state === 'sent'} className="ml-3 inline-flex items-center gap-1 text-xs text-muted hover:text-ink disabled:opacity-60">
       <Send size={11} /> {state === 'sent' ? 'Sent to Intervals' : state === 'error' ? 'Failed — retry' : state === 'sending' ? 'Sending…' : 'Send g/h to Intervals'}
     </button>
   );

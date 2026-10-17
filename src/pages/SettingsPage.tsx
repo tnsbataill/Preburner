@@ -5,7 +5,7 @@ import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
 import { type Theme, useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
-import { Button, Card, Field, NumberInput, Segmented, Slider, Toggle, cx, inputCls } from '../ui/primitives';
+import { Button, Card, ConfirmButton, cx, Field, inputCls, NumberInput, Segmented, Slider, Toggle } from '../ui/primitives';
 
 const SECTIONS = [
   ['connections', 'Connections'],
@@ -320,14 +320,9 @@ export function SettingsPage() {
           <Button variant="ghost" onClick={() => s.update(() => ({ onboarded: false }))}>
             Re-run setup
           </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (confirm('Reset all Preburner data in this browser? Your Intervals.icu data is not affected.')) s.resetAll();
-            }}
-          >
+          <ConfirmButton message="Reset all Preburner data in this browser? Intervals.icu isn't affected." confirmLabel="Reset" onConfirm={() => s.resetAll()}>
             Reset everything
-          </Button>
+          </ConfirmButton>
         </div>
       </Section>
     </div>

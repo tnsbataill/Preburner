@@ -10,7 +10,7 @@ import { useToday } from '../state/usePlan';
 import { analyzeHistory } from '../training/planner';
 import { planEnd } from '../training/generator';
 import type { Objective, PlanWeek, PlannedSession, SessionKind, TrainingPlan } from '../training/types';
-import { Button, Card, Chip, SectionTitle, Segmented, Stat, cx } from '../ui/primitives';
+import { Button, Card, Chip, ConfirmButton, cx, SectionTitle, Segmented, Stat } from '../ui/primitives';
 
 const KIND_COLOR: Record<SessionKind, string> = {
   recovery: 'rgb(var(--i-recovery))',
@@ -377,10 +377,10 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
                 {mode === 'intervals' ? (training.appliedAt ? `Sync ${pending} changes to Intervals` : `Send ${pending} sessions to Intervals`) : training.appliedAt ? 'Save changes' : 'Use this plan'}
               </Button>
             )}
-            <Button variant="danger" disabled={!!busy} onClick={() => confirm('Discard this plan? Future plan sessions are removed from your calendar.') && void act('discard', discard)}>
+            <ConfirmButton disabled={!!busy} message="Remove future plan sessions from your calendar?" confirmLabel="Discard plan" onConfirm={() => void act('discard', discard)}>
               {busy === 'discard' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
               Discard
-            </Button>
+            </ConfirmButton>
           </div>
         </div>
         {training.appliedAt && training.dirtyIds.length === 0 && <Chip className="mt-2 border-good/40 text-good">{mode === 'intervals' ? 'On your Intervals calendar' : 'Active'}</Chip>}

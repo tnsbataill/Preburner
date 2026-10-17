@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { type ButtonHTMLAttributes, type ReactNode, useEffect } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useState } from 'react';
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -52,6 +52,56 @@ export function Button({ variant = 'outline', className, children, ...rest }: Bu
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * A button that asks for confirmation in place. Native confirm() dialogs are
+ * silently suppressed in some embedded browsers and installed web apps
+ * (they return false without showing), which made actions do nothing.
+ */
+export function ConfirmButton({
+  message,
+  confirmLabel,
+  onConfirm,
+  variant = 'danger',
+  children,
+  disabled,
+  className,
+}: {
+  message: ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void;
+  variant?: Variant;
+  children: ReactNode;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [armed, setArmed] = useState(false);
+  if (!armed)
+    return (
+      <Button variant={variant} disabled={disabled} className={className} onClick={() => setArmed(true)}>
+        {children}
+      </Button>
+    );
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2" role="group" aria-label="Confirm">
+      <span className="text-sm text-muted">{message}</span>
+      <Button
+        variant={variant}
+        disabled={disabled}
+        onClick={() => {
+          setArmed(false);
+          onConfirm();
+        }}
+        autoFocus
+      >
+        {confirmLabel}
+      </Button>
+      <Button variant="ghost" onClick={() => setArmed(false)}>
+        Cancel
+      </Button>
+    </span>
   );
 }
 
