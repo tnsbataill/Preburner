@@ -104,3 +104,8 @@ input[type='range'] {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+/* Installed on iOS the status bar is translucent (black-translucent) and the
+   page runs under it, so anything at the top of the screen clears the notch. */
+.safe-top {
+  padding-top: calc(var(--pad-top, 0px) + env(safe-area-inset-top));
+}

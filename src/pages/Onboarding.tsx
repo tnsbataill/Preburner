@@ -49,7 +49,7 @@ export function Onboarding() {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60" style={{ background: 'radial-gradient(60% 60% at 50% 0%, rgb(var(--ember) / 0.25), transparent 70%)' }} />
-      <div className="relative mx-auto flex min-h-full max-w-lg flex-col px-5 py-10 sm:py-16">
+      <div className="safe-top relative mx-auto flex min-h-full max-w-lg flex-col px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] [--pad-top:2.5rem] sm:[--pad-top:4rem]">
         <div className="mb-10 flex items-center gap-2.5">
           <div className="ember-bg grid h-9 w-9 place-items-center rounded-xl text-white shadow-glow">
             <Flame size={20} />

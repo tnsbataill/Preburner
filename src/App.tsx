@@ -138,7 +138,7 @@ export default function App() {
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line/60 bg-bg/80 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="safe-top sticky top-0 z-30 flex items-center justify-between border-b border-line/60 bg-bg/80 px-4 pb-3 backdrop-blur-xl [--pad-top:0.75rem] lg:hidden">
           <div className="flex items-center gap-2">
             <div className="ember-bg grid h-7 w-7 place-items-center rounded-lg text-white">
               <Flame size={15} />
