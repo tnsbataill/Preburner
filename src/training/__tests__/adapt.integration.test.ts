@@ -113,7 +113,7 @@ describe('how did it feel -> progression', () => {
 describe('calendar merge', () => {
   it('plan sessions replace other planned sessions in the window; completed rides stay', () => {
     const today = START;
-    const tr = makeWorkout({ id: 'icu-1', date: addDays(START, 2), title: 'TR Lamarck', durationMin: 75, intensity: 'Threshold', ftp: 260, source: 'intervals' });
+    const tr = makeWorkout({ id: 'icu-1', date: addDays(START, 2), title: 'TR Threshold 3x12', durationMin: 75, intensity: 'Threshold', ftp: 260, source: 'intervals' });
     const done = { ...makeWorkout({ id: 'act-9', date: addDays(START, -1), title: 'Ride', durationMin: 60, intensity: 'Endurance', ftp: 260 }), completed: true };
     const merged = mergePlanIntoCalendar([tr, done], { ...INITIAL_TRAINING, plan }, today, 'demo', 260);
     expect(merged.find((w) => w.id === 'icu-1')).toBeUndefined();

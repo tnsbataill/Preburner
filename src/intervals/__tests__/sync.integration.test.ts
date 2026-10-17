@@ -47,12 +47,12 @@ describe('Intervals sync (recorded responses)', () => {
 
     // workouts
     const byTitle = Object.fromEntries(res.workouts.map((w) => [w.title, w]));
-    expect(byTitle.Lamarck).toMatchObject({ startMin: null, kj: 811, kjSource: 'description', intensity: 'Threshold', load: 99 });
+    expect(byTitle['Threshold 3x12']).toMatchObject({ startMin: null, kj: 811, kjSource: 'description', intensity: 'Threshold', load: 99 });
     expect(byTitle['Sweet Spot 3x12']).toMatchObject({ startMin: 375, kjSource: 'steps', carbsPerHourOverride: 75, intensity: 'Threshold' });
     expect(byTitle['Sweet Spot 3x12'].steps).toHaveLength(8);
     expect(byTitle['Local Crit'].intensity).toBe('Race');
-    expect(res.workouts.filter((w) => w.title === 'Pettit')).toHaveLength(1);
-    expect(byTitle.Pettit).toMatchObject({ completed: true, kj: 612, kjSource: 'actual', startMin: 17 * 60 + 42 });
+    expect(res.workouts.filter((w) => w.title === 'Endurance 1h')).toHaveLength(1);
+    expect(byTitle['Endurance 1h']).toMatchObject({ completed: true, kj: 612, kjSource: 'actual', startMin: 17 * 60 + 42 });
     expect(res.workouts.some((w) => w.title === 'Travel day')).toBe(false);
 
     // wellness
@@ -66,7 +66,7 @@ describe('Intervals sync (recorded responses)', () => {
     const settings = { ...DEFAULT_SETTINGS, profile: { ...DEFAULT_SETTINGS.profile, ...res.profile } };
     const plan = buildPlan({ settings, workouts: res.workouts, start: today, days: 4, today });
     const tomorrow = plan.days[1];
-    expect(tomorrow.workouts[0]).toMatchObject({ title: 'Lamarck', timeAssumed: true, resolvedStartMin: settings.schedule.defaultTrainingMin[tomorrow.weekday] });
+    expect(tomorrow.workouts[0]).toMatchObject({ title: 'Threshold 3x12', timeAssumed: true, resolvedStartMin: settings.schedule.defaultTrainingMin[tomorrow.weekday] });
     const during = plan.days[2].slots.find((s) => s.kind === 'during')!;
     expect(during.fueling?.carbPerHour).toBe(75);
     expect(plan.days[2].slots[0].startMin).toBeLessThanOrEqual(375 - 15);

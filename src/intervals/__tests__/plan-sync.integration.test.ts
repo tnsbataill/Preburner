@@ -14,7 +14,7 @@ const d = (o: number) => addDays(today, o);
 
 class FakeIntervals {
   events: IcuEvent[] = [
-    { id: 1, start_date_local: `${d(9)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'TR Lamarck', moving_time: 4500, icu_training_load: 99, tags: ['trainerroad'] },
+    { id: 1, start_date_local: `${d(9)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'TR Threshold 3x12', moving_time: 4500, icu_training_load: 99, tags: ['trainerroad'] },
     { id: 2, start_date_local: `${d(20)}T08:00:00`, category: 'RACE_B', type: 'Ride', name: 'Gran Fondo', moving_time: 14400, icu_training_load: 260 },
   ];
   nextId = 100;
@@ -122,7 +122,7 @@ describe('training plan <-> Intervals.icu', () => {
     const s = useApp.getState();
     const cal = mergePlanIntoCalendar(s.workouts, s.training, today, 'intervals', 305);
     expect(cal.filter((w) => w.source === 'preburner' && w.date >= today)).toHaveLength(plan.sessions.length);
-    expect(cal.find((w) => w.title === 'TR Lamarck')).toBeUndefined();
+    expect(cal.find((w) => w.title === 'TR Threshold 3x12')).toBeUndefined();
     expect(cal.find((w) => w.title === 'Gran Fondo')).toBeDefined();
     // Re-applying is idempotent.
     await useApp.getState().applyTrainingPlan();
@@ -167,7 +167,7 @@ describe('training plan <-> Intervals.icu', () => {
   it('discarding removes the future plan events and keeps everything else', async () => {
     await useApp.getState().discardTrainingPlan();
     expect(fake.planEvents().filter((e) => e.start_date_local.slice(0, 10) >= today)).toHaveLength(0);
-    expect(fake.events.map((e) => e.name)).toEqual(expect.arrayContaining(['TR Lamarck', 'Gran Fondo']));
+    expect(fake.events.map((e) => e.name)).toEqual(expect.arrayContaining(['TR Threshold 3x12', 'Gran Fondo']));
     expect(useApp.getState().training.plan).toBeUndefined();
   });
 });

@@ -1,27 +1,33 @@
 import { addDays, weekStartOf } from '../engine/time';
 import type { DateKey, Intensity, WeightEntry, WellnessDay, Workout } from '../engine/types';
 import { makeWorkout } from '../engine/workout';
+import { buildSession, expandBlocks } from '../training/library';
+import type { SessionKind } from '../training/types';
 
 // A realistic TrainerRoad-style block: date-only sessions (time unknown),
 // a two-a-day, long weekend rides, and a B-race at the end of week 3.
 
-type Spec = [dayOffset: number, title: string, minutes: number, intensity: Intensity, ifactor: number, startMin?: number];
+type Spec = [dayOffset: number, title: string, minutes: number, intensity: Intensity, ifactor: number, startMin?: number, kind?: SessionKind];
 
+// Indoor sessions carry structured steps (from the planner's own library) like
+// TrainerRoad workouts synced through Intervals; outdoor rides have none.
 const WEEK: Spec[] = [
-  [0, 'Recovery spin — Petit', 45, 'Recovery', 0.5],
-  [1, 'Threshold — Lamarck', 75, 'Threshold', 0.89],
-  [2, 'Endurance — Pettit', 60, 'Endurance', 0.66],
-  [3, 'VO2max — Spencer +2', 75, 'VO2', 0.88],
-  [5, 'Sweet spot — Antelope', 90, 'Threshold', 0.86, 8 * 60],
+  [0, 'Recovery spin', 45, 'Recovery', 0.5, undefined, 'recovery'],
+  [1, 'Threshold intervals', 75, 'Threshold', 0.89, undefined, 'threshold'],
+  [2, 'Endurance ride', 60, 'Endurance', 0.66, undefined, 'endurance'],
+  [3, 'VO2max intervals', 75, 'VO2', 0.88, undefined, 'vo2'],
+  [5, 'Sweet spot intervals', 90, 'Threshold', 0.86, 8 * 60, 'sweetspot'],
   [5, 'Easy spin — commute home', 40, 'Endurance', 0.6, 17 * 60 + 30],
   [6, 'Long endurance group ride', 210, 'Endurance', 0.7, 8 * 60],
 ];
+
+const stepsFor = (kind: SessionKind, minutes: number) => expandBlocks(buildSession(kind, minutes, 3).blocks);
 
 export function demoWorkouts(today: DateKey, ftp: number): Workout[] {
   const monday = weekStartOf(today);
   const out: Workout[] = [];
   for (let week = -1; week < 3; week += 1) {
-    for (const [d, title, minutes, intensity, ifactor, startMin] of WEEK) {
+    for (const [d, title, minutes, intensity, ifactor, startMin, kind] of WEEK) {
       const date = addDays(monday, week * 7 + d);
       // Week 3 Sunday: race instead of the long ride; Saturday becomes openers.
       if (week === 2 && d === 6) {
@@ -29,24 +35,23 @@ export function demoWorkouts(today: DateKey, ftp: number): Workout[] {
         continue;
       }
       if (week === 2 && d === 5) {
-        if (startMin === 8 * 60) out.push(makeWorkout({ id: `demo-${date}-openers`, date, title: 'Openers', durationMin: 50, intensity: 'Tempo', ifactor: 0.72, ftp, source: 'demo' }));
+        if (startMin === 8 * 60) out.push({ ...makeWorkout({ id: `demo-${date}-openers`, date, title: 'Openers', durationMin: 50, intensity: 'Tempo', ifactor: 0.72, ftp, source: 'demo' }), steps: stepsFor('openers', 50) });
         continue;
       }
       const scale = week === 1 ? 1.1 : 1; // build week
-      out.push(
-        makeWorkout({
-          id: `demo-${date}-${d}-${minutes}`,
-          date,
-          title,
-          durationMin: Math.round(minutes * scale),
-          intensity,
-          ifactor,
-          startMin: startMin ?? null,
-          ftp,
-          source: 'demo',
-          indoor: startMin === undefined,
-        }),
-      );
+      const w = makeWorkout({
+        id: `demo-${date}-${d}-${minutes}`,
+        date,
+        title,
+        durationMin: Math.round(minutes * scale),
+        intensity,
+        ifactor,
+        startMin: startMin ?? null,
+        ftp,
+        source: 'demo',
+        indoor: startMin === undefined,
+      });
+      out.push(kind ? { ...w, steps: stepsFor(kind, w.durationMin) } : w);
     }
   }
   return out.map((w) => (w.date < today ? { ...w, completed: true } : w));

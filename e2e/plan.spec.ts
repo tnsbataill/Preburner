@@ -39,7 +39,7 @@ test('generates an optimised FTP plan from history and puts it on the calendar',
   const next = page.getByRole('button', { name: 'Next week' });
   await next.click();
   await expect(page.getByText(/Sweet spot:|Threshold:|VO2max:|Over-unders:|30\/15s:/).first()).toBeVisible();
-  await expect(page.getByText('Threshold — Lamarck')).toHaveCount(0);
+  await expect(page.getByText('Threshold intervals')).toHaveCount(0);
 
   // Survives a reload.
   await page.reload();
@@ -87,7 +87,7 @@ test('discarding the plan brings the original calendar back', async ({ page }) =
   await expect(page.getByTestId('generate-plan')).toBeVisible();
   await page.goto('/#/week');
   await page.getByRole('button', { name: 'Next week' }).click();
-  await expect(page.getByText('Threshold — Lamarck').first()).toBeVisible();
+  await expect(page.getByText('Threshold intervals').first()).toBeVisible();
 });
 
 test('a history file (e.g. built from the Strava connector) drives the model and the plan', async ({ page }, info) => {

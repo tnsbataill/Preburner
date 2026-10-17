@@ -22,7 +22,7 @@ export const events = (d: (offset: number) => string) => [
     start_date_local: `${d(1)}T00:00:00`,
     category: 'WORKOUT',
     type: 'VirtualRide',
-    name: 'Lamarck',
+    name: 'Threshold 3x12',
     description: '<p>Threshold intervals. Intervals set to burn kJ(Cal) 811 for this session.</p>',
     moving_time: 4500,
     icu_training_load: 99,
@@ -48,7 +48,7 @@ export const events = (d: (offset: number) => string) => [
     carbs_per_hour: 75,
   },
   // Planned event already completed (paired below) — should be replaced by the activity
-  { id: 74541740, start_date_local: `${d(-1)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'Pettit', moving_time: 3600, icu_training_load: 44, icu_intensity: 66 },
+  { id: 74541740, start_date_local: `${d(-1)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'Endurance 1h', moving_time: 3600, icu_training_load: 44, icu_intensity: 66 },
   // A race
   { id: 74541799, start_date_local: `${d(10)}T08:00:00`, category: 'RACE_B', type: 'Ride', name: 'Local Crit', moving_time: 3600 },
   // A note — ignored by the planner
@@ -60,7 +60,7 @@ export const activities = (d: (offset: number) => string) => [
     id: 'i99887766',
     start_date_local: `${d(-1)}T17:42:10`,
     type: 'VirtualRide',
-    name: 'Pettit',
+    name: 'Endurance 1h',
     moving_time: 3612,
     icu_training_load: 46,
     icu_intensity: 67,
