@@ -5,6 +5,7 @@ import { buildPlan } from '../engine/plan';
 import { addDays, todayKey } from '../engine/time';
 import type { Workout } from '../engine/types';
 import { useApp } from './store';
+import { useWeights, useWellness } from './useHealth';
 import { mergePlanIntoCalendar } from './training';
 
 export const PLAN_PAST_DAYS = 7;
@@ -35,8 +36,8 @@ export function useToday() {
 
 export function usePlan() {
   const settings = useApp((s) => s.settings);
-  const weights = useApp((s) => s.weights);
-  const wellness = useApp((s) => s.wellness);
+  const weights = useWeights();
+  const wellness = useWellness();
   const workouts = useEffectiveWorkouts();
   const today = useToday();
 

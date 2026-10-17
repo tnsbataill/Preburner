@@ -5,6 +5,7 @@ import { constantLoadFor, rampRate } from '../engine/fitness';
 import { addDays, diffDays, formatDate, weekStartOf } from '../engine/time';
 import { useApp } from '../state/store';
 import { usePlan } from '../state/usePlan';
+import { useWellness } from '../state/useHealth';
 import { fmtWeight } from '../ui/format';
 import { Button, Card, Chip, SectionTitle, Stat } from '../ui/primitives';
 
@@ -12,7 +13,7 @@ export function FitnessPage() {
   const { fitness, today, currentWeightKg } = usePlan();
   const goals = useApp((s) => s.settings.goals);
   const profile = useApp((s) => s.settings.profile);
-  const wellness = useApp((s) => s.wellness);
+  const wellness = useWellness();
   const now = fitness.find((p) => p.date === today) ?? fitness.at(-1)!;
   const ramp = rampRate(fitness, today);
   const eventPt = goals.eventDate ? fitness.find((p) => p.date === goals.eventDate) : undefined;
@@ -32,7 +33,10 @@ export function FitnessPage() {
   }
   const weekList = [...weeks.entries()].slice(-12);
   const maxWeek = Math.max(...weekList.map(([, w]) => w.load), 1);
-  const latest = [...wellness].reverse().find((w) => w.hrv || w.restingHR);
+  const latest = [...wellness].reverse().find((w) => w.hrv || w.hrvSdnn || w.restingHR);
+  // Intervals' rMSSD when there is one; otherwise Apple Watch SDNN, labelled as such.
+  const hrv = latest?.hrv ?? latest?.hrvSdnn;
+  const hrvUnit = latest?.hrv ? 'ms HRV' : 'ms HRV (SDNN)';
   const wPerKg = profile.ftp / currentWeightKg;
 
   return (
@@ -53,7 +57,7 @@ export function FitnessPage() {
           <Stat label="FTP" value={profile.ftp} unit="W" sub={`${wPerKg.toFixed(2)} W/kg at ${fmtWeight(currentWeightKg, profile.units)}`} />
         </Card>
         <Card className="p-4">
-          <Stat label="Recovery" value={latest?.hrv ? Math.round(latest.hrv) : '—'} unit={latest?.hrv ? 'ms HRV' : undefined} sub={latest?.restingHR ? `RHR ${latest.restingHR} bpm` : 'sync wellness from Intervals'} />
+          <Stat label="Recovery" value={hrv ? Math.round(hrv) : '—'} unit={hrv ? hrvUnit : undefined} sub={latest?.restingHR ? `RHR ${latest.restingHR} bpm` : 'sync from Intervals or import Apple Health'} />
         </Card>
       </div>
 

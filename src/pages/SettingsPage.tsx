@@ -3,12 +3,14 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { EFFICIENCY_PRESETS, NEAT_PRESETS } from '../engine/defaults';
 import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
+import { AppleHealthImport } from '../components/AppleHealthImport';
 import { type Theme, useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
 import { Button, Card, ConfirmButton, cx, Field, inputCls, NumberInput, Segmented, Slider, Toggle } from '../ui/primitives';
 
 const SECTIONS = [
   ['connections', 'Connections'],
+  ['health', 'Apple Health'],
   ['profile', 'Profile'],
   ['schedule', 'Daily rhythm'],
   ['goals', 'Goals'],
@@ -157,6 +159,10 @@ export function SettingsPage() {
             />
           </div>
         </div>
+      </Section>
+
+      <Section id="health" title="Apple Health" desc="Weight, body fat, resting HR, HRV and sleep from the Health app's export.">
+        <AppleHealthImport />
       </Section>
 
       <Section id="profile" title="Profile" desc={s.connection.mode === 'intervals' ? 'FTP, weight, height, sex and age sync from Intervals.icu; edits here are overwritten on the next sync.' : undefined}>

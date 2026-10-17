@@ -6,6 +6,7 @@ import { addDays, diffDays, formatDate, formatDuration, weekStartOf, weekdayShor
 import type { DayPlan } from '../engine/types';
 import { useApp } from '../state/store';
 import { usePlan } from '../state/usePlan';
+import { useWeights } from '../state/useHealth';
 import { INTENSITY_COLOR, fmtInt, fmtRate, fmtWeight } from '../ui/format';
 import { Bar, Card, SectionTitle, Stat, cx } from '../ui/primitives';
 
@@ -68,7 +69,7 @@ function DayColumn({ day, today, maxKcal }: { day: DayPlan; today: string; maxKc
 export function WeekPage() {
   const { plan, today, trend, currentWeightKg } = usePlan();
   const settings = useApp((s) => s.settings);
-  const weights = useApp((s) => s.weights);
+  const weights = useWeights();
   const units = settings.profile.units;
   const weekKeys = useMemo(() => plan.weeks.map((w) => w.weekStart), [plan.weeks]);
   const [idx, setIdx] = useState(() => Math.max(0, weekKeys.indexOf(weekStartOf(today))));

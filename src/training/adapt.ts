@@ -18,6 +18,8 @@ export interface Readiness {
   hrv7?: number;
   hrvLow?: number;
   hrvHigh?: number;
+  /** which HRV measure the baseline uses: rMSSD (Intervals) or SDNN (Apple Watch) */
+  hrvKind?: 'rmssd' | 'sdnn';
   rhrDelta?: number;
   tsb: number;
   reasons: string[];
@@ -62,9 +64,14 @@ export function readiness(wellness: WellnessRecord[], date: DateKey, tsb: number
   let hrvFlag = false;
   let rhrFlag = false;
   const out: Readiness = { date, level: 'green', tsb, reasons };
-  const baseHrv = base.map((w) => w.lnRmssd).filter((x): x is number => x !== undefined);
-  const hrv7 = last7.map((w) => w.lnRmssd).filter((x): x is number => x !== undefined);
+  // rMSSD and SDNN are different measures: never mix them in one baseline.
+  // SDNN (Apple Watch) is used only when the window has no rMSSD at all.
+  const kind = [...base, ...last7].some((w) => w.lnRmssd !== undefined) ? 'rmssd' : 'sdnn';
+  const hrvOf = (w: WellnessRecord) => (kind === 'rmssd' ? w.lnRmssd : w.lnSdnn);
+  const baseHrv = base.map(hrvOf).filter((x): x is number => x !== undefined);
+  const hrv7 = last7.map(hrvOf).filter((x): x is number => x !== undefined);
   if (baseHrv.length >= 20 && hrv7.length >= 3) {
+    out.hrvKind = kind;
     const m = mean(baseHrv);
     const s = sd(baseHrv);
     out.hrv7 = mean(hrv7);

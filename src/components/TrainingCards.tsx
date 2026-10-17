@@ -39,7 +39,7 @@ export function ReadinessCard() {
             <div className="num mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {readiness.hrv7 !== undefined && readiness.hrvLow !== undefined && (
                 <Chip>
-                  HRV 7d {Math.round(Math.exp(readiness.hrv7))} ms (normal ≥ {Math.round(Math.exp(readiness.hrvLow))})
+                  HRV{readiness.hrvKind === 'sdnn' ? ' (SDNN)' : ''} 7d {Math.round(Math.exp(readiness.hrv7))} ms (normal ≥ {Math.round(Math.exp(readiness.hrvLow))})
                 </Chip>
               )}
               {readiness.rhrDelta !== undefined && <Chip>RHR {readiness.rhrDelta >= 0 ? '+' : ''}{readiness.rhrDelta.toFixed(1)} bpm</Chip>}

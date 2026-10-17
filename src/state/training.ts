@@ -1,3 +1,5 @@
+import type { AppleHealthData } from '../health/appleHealth';
+import { withHealthRecords } from '../health/merge';
 import { addDays, diffDays, weekdayOf } from '../engine/time';
 import type { DateKey, Schedule, Workout } from '../engine/types';
 import type { NewEvent } from '../intervals/client';
@@ -51,6 +53,8 @@ export interface TrainingState {
   rideIssues: Record<string, { issue: RideIssue; sessionId?: string }>;
   /** hide other (e.g. TrainerRoad) planned sessions inside the plan window */
   replaceExternal: boolean;
+  /** last Apple Health import (kept apart so an Intervals sync never wipes it) */
+  appleHealth?: AppleHealthData;
 }
 
 export const INITIAL_TRAINING: TrainingState = {
@@ -67,6 +71,11 @@ export const INITIAL_TRAINING: TrainingState = {
 };
 
 /** All rides from every source, de-duplicated, with in-app feedback applied. */
+/** Wellness for readiness: Intervals' records with Apple Health merged in. */
+export function trainingWellness(t: TrainingState): WellnessRecord[] {
+  return withHealthRecords(t.wellness, t.appleHealth);
+}
+
 export function historyRides(t: TrainingState): RideRecord[] {
   const merged = mergeRides(t.intervalsRides, t.stravaRides);
   const plan = t.plan;
@@ -223,13 +232,13 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   const rides = historyRides(t);
   const { tsb } = currentTsb(rides, today);
   // Outside the plan window there's nothing to change, but readiness still matters.
-  if (today < plan.request.start || today > addDays(planEnd(plan), 1)) return { lastAdapt: today, readiness: readiness(t.wellness, today, tsb, cfg, rides) };
+  if (today < plan.request.start || today > addDays(planEnd(plan), 1)) return { lastAdapt: today, readiness: readiness(trainingWellness(t), today, tsb, cfg, rides) };
   const since = t.lastAdapt ? addDays(t.lastAdapt, 0) : addDays(today, -1);
   // Rides whose RPE was already applied (answered in-app) don't count twice.
   // Only readiness swaps count toward its cap; "I was sick" swaps don't.
   const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade' && a.source !== 'debrief').map((a) => a.date);
   const working = mode === 'intervals' ? ftp : (t.ftp ?? ftp);
-  const out = adaptDay({ plan, today, since, rides, wellness: t.wellness, ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {} }, cfg);
+  const out = adaptDay({ plan, today, since, rides, wellness: trainingWellness(t), ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {} }, cfg);
   const ftpAdj = out.adjustments.filter((a) => a.action === 'ftp').at(-1);
   // Intervals resolves %FTP against its own FTP: suggest, don't silently diverge.
   const ftpPatch: Partial<TrainingState> =

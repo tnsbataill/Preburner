@@ -10,6 +10,7 @@ import { formatDate, formatDuration } from '../engine/time';
 import { IntervalsClient } from '../intervals/client';
 import { useApp } from '../state/store';
 import { useEffectiveWorkouts, useToday } from '../state/usePlan';
+import { useWeights, useWellness } from '../state/useHealth';
 import { INTENSITY_COLOR } from '../ui/format';
 import { Button, Card, Chip, cx } from '../ui/primitives';
 
@@ -80,12 +81,14 @@ function ChangeRow({ change, proposal, workoutsById }: { change: ProposalChange;
 
 function ProposalCard({ proposal }: { proposal: Proposal }) {
   const s = useApp();
+  const wellness = useWellness();
+  const weights = useWeights();
   const workouts = useEffectiveWorkouts();
   const today = useToday();
   const [busy, setBusy] = useState(false);
   const byId = useMemo(() => new Map(workouts.map((w) => [w.id, w])), [workouts]);
   const accepted = proposal.changes.filter((c) => c.status === 'accepted');
-  const world = { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today, training: s.training };
+  const world = { settings: s.settings, workouts, wellness, weights, today, training: s.training };
   const impact = useMemo(() => {
     if (!accepted.length) return undefined;
     const sim = runTool({ ...world }, 'simulate_changes', { changes: accepted }) as { baseline: { event: { ctl: number; tsb: number } | null; ctlIn4Weeks: number }; withChanges: { event: { ctl: number; tsb: number } | null; ctlIn4Weeks: number } };
@@ -154,6 +157,8 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
 
 export function CoachPage() {
   const s = useApp();
+  const wellness = useWellness();
+  const weights = useWeights();
   const workouts = useEffectiveWorkouts();
   const today = useToday();
   const [input, setInput] = useState(() => (new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('ask') === 'event' ? PROMPTS[0].text : ''));
@@ -182,7 +187,7 @@ export function CoachPage() {
       const res = await runCoach({
         apiKey: s.connection.anthropicKey,
         model: s.connection.coachModel,
-        world: { settings: s.settings, workouts, wellness: s.wellness, weights: s.weights, today, training: s.training },
+        world: { settings: s.settings, workouts, wellness, weights, today, training: s.training },
         history: loadCoachHistory() as Anthropic.Beta.BetaMessageParam[],
         userText: text,
         signal: abort.current.signal,

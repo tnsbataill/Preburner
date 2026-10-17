@@ -11,6 +11,7 @@ It's a PWA hosted on GitHub Pages. Everything stays in your browser; keys are on
 - **Fitness** – CTL/ATL/TSB history and a projection through your planned load to your goal event, with weekly load and ramp warnings.
 - **Coach** – a chat that grounds every answer in the engine's numbers and ends with a proposal of specific changes. You accept or reject each change, then apply it.
 - **Settings** – profile (synced from Intervals), daily rhythm, usual training times per weekday, goals, fuelling preferences, theme, backup and import.
+- **Apple Health** – import the Health app's export (Profile → Export All Health Data) for weight, body fat, resting HR, HRV and sleep. It's kept apart from Intervals data, so a sync never wipes it. Intervals values win where both have one. Apple's HRV is SDNN, a different measure from the rMSSD Intervals reports, so readiness uses it only when there's no rMSSD at all.
 
 ## The model, briefly
 

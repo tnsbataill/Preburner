@@ -49,7 +49,7 @@ export interface Workout {
 export interface WeightEntry {
   date: DateKey;
   kg: number;
-  source: 'manual' | 'intervals';
+  source: 'manual' | 'intervals' | 'apple-health';
 }
 
 export interface WellnessDay {
@@ -58,7 +58,10 @@ export interface WellnessDay {
   atl?: number;
   weight?: number;
   restingHR?: number;
+  /** rMSSD, ms (Intervals) */
   hrv?: number;
+  /** SDNN, ms (Apple Health): a different measure, never mixed with rMSSD */
+  hrvSdnn?: number;
   sleepHours?: number;
   kcalConsumed?: number;
 }

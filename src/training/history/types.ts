@@ -54,6 +54,8 @@ export interface WellnessRecord {
   date: DateKey;
   /** natural log of rMSSD (ms) */
   lnRmssd?: number;
+  /** natural log of SDNN (ms), from Apple Health; only used when there's no rMSSD */
+  lnSdnn?: number;
   rhr?: number;
   sleepHours?: number;
 }

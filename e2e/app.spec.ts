@@ -93,3 +93,39 @@ test('no horizontal scroll on any page', async ({ page }) => {
     expect(overflow, r).toBeLessThanOrEqual(1);
   }
 });
+
+test('an Apple Health export is imported: report, body fat into the profile, kept across reload', async ({ page }, info) => {
+  const { strToU8, zipSync } = await import('fflate');
+  const { writeFileSync } = await import('node:fs');
+  // Synthetic export dated relative to today, in the shape the Health app writes.
+  const day = (offset: number) => new Date(Date.now() + offset * 864e5).toISOString().slice(0, 10);
+  const rec = (type: string, d: string, time: string, endTime: string, value: string, unit = '') =>
+    `<Record type="${type}" sourceName="Test Watch" ${unit ? `unit="${unit}" ` : ''}startDate="${d} ${time} -0400" endDate="${d} ${endTime} -0400" value="${value}"/>`;
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8"?><HealthData locale="en_US">',
+    rec('HKQuantityTypeIdentifierBodyMass', day(-1), '06:40:00', '06:40:00', '170.0', 'lb'),
+    rec('HKQuantityTypeIdentifierBodyMass', day(-2), '06:40:00', '06:40:00', '171.0', 'lb'),
+    rec('HKQuantityTypeIdentifierBodyFatPercentage', day(-1), '06:40:00', '06:40:00', '0.17', '%'),
+    rec('HKQuantityTypeIdentifierRestingHeartRate', day(-1), '00:00:00', '23:59:00', '51', 'count/min'),
+    rec('HKQuantityTypeIdentifierHeartRateVariabilitySDNN', day(-1), '02:00:00', '02:01:00', '48', 'ms'),
+    rec('HKCategoryTypeIdentifierSleepAnalysis', day(-1), '00:00:00', '07:30:00', 'HKCategoryValueSleepAnalysisAsleepCore'),
+    rec('HKQuantityTypeIdentifierHeartRate', day(-1), '07:00:00', '07:00:00', '60', 'count/min'),
+    '</HealthData>',
+  ].join('\n');
+  const file = info.outputPath('export.zip');
+  writeFileSync(file, zipSync({ 'apple_health_export/export.xml': strToU8(xml) }));
+
+  await onboardWithDemo(page);
+  await page.goto('/#/settings');
+  await page.getByTestId('apple-health-file').setInputFiles(file);
+  const report = page.getByTestId('apple-health-report');
+  await expect(report).toContainText('2 days');
+  await expect(report.locator('li').filter({ hasText: 'Weight' })).toContainText('2 days');
+  await expect(report.locator('li').filter({ hasText: 'HRV (SDNN)' })).toContainText('1 days');
+  await expect(report.locator('li').filter({ hasText: 'Sleep' })).toContainText('Test Watch');
+  await expect(report).toContainText('Body fat 17%');
+  await expect(page.getByLabel(/^Body fat/)).toHaveValue('17');
+
+  await page.reload();
+  await expect(page.getByTestId('apple-health-report')).toContainText('Body fat 17%');
+});

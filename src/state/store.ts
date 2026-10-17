@@ -11,7 +11,9 @@ import { readArchive, toRideRecords } from '../training/history/strava';
 import { readZipStream } from '../training/history/zip';
 import type { MissedReason, RideIssue } from '../training/history/types';
 import type { MealSuggestion } from '../coach/meal';
-import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation } from './training';
+import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation, trainingWellness } from './training';
+import { readHealthExport } from '../health/appleHealth';
+import { recentBodyFat } from '../health/merge';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
 
@@ -67,6 +69,8 @@ export interface AppState {
   importStrava: (file: File, onProgress?: (fraction: number) => void) => Promise<void>;
   /** snapshots/history.json produced by scripts/build-history.ts */
   importHistoryJson: (file: File) => Promise<void>;
+  /** Apple Health export (zip or export.xml) */
+  importAppleHealth: (file: File, onProgress?: (fraction: number) => void) => Promise<void>;
   setFeedback: (rideId: string, fb: Feedback) => Promise<void>;
   adaptTraining: () => void;
   answerMissed: (sessionId: string, reason: MissedReason) => void;
@@ -77,7 +81,7 @@ export interface AppState {
 export function trainingSnapshot(s: Pick<AppState, 'training' | 'settings'>, today: DateKey): AthleteSnapshot {
   return {
     rides: historyRides(s.training).filter((r) => r.date < today),
-    wellness: s.training.wellness,
+    wellness: trainingWellness(s.training),
     ftpSet: s.training.ftp ?? s.settings.profile.ftp,
     availabilityHours: s.settings.goals.availabilityHours,
     maxRampPerWeek: s.settings.goals.maxRampPerWeek,
@@ -252,6 +256,18 @@ export const useApp = create<AppState>()(
         const rides = toRideRecords(activities, get().settings.profile.ftp);
         onProgress?.(1);
         set((s) => ({ training: { ...s.training, stravaRides: rides, stravaReport: { ...report, importedAt: new Date().toISOString() } } }));
+      },
+
+      importAppleHealth: async (file, onProgress) => {
+        const today = todayKey(get().settings.profile.timezone);
+        const res = await readHealthExport(file, { since: addDays(today, -400), onProgress });
+        const data = { ...res, importedAt: new Date().toISOString() };
+        // A recent body-fat reading sets fat-free mass, which the energy-availability floor uses.
+        const bf = recentBodyFat(data, today);
+        set((s) => ({
+          training: { ...s.training, appleHealth: { ...data, report: { ...data.report, appliedBodyFat: bf } } },
+          ...(bf && { settings: { ...s.settings, profile: { ...s.settings.profile, bodyFatPct: bf.pct } } }),
+        }));
       },
 
       importHistoryJson: async (file) => {

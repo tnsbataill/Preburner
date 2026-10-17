@@ -5,7 +5,7 @@ import { AdjustmentRow, DebriefPrompt, FeedbackPrompt, NoDataNotice, ReadinessCa
 import { addDays, diffDays, formatDate, formatDuration, weekStartOf, weekdayOf, weekdayShort } from '../engine/time';
 import { useApp } from '../state/store';
 import { trainingSnapshot } from '../state/store';
-import { historyRides } from '../state/training';
+import { historyRides, trainingWellness } from '../state/training';
 import { useToday } from '../state/usePlan';
 import { analyzeHistory } from '../training/planner';
 import { planEnd } from '../training/generator';
@@ -50,7 +50,7 @@ function DataCard() {
   const rides = useMemo(() => historyRides(training), [training]);
   const withPower = rides.filter((r) => r.best20).length;
   const withRpe = rides.filter((r) => r.rpe !== undefined).length;
-  const hrvDays = training.wellness.filter((w) => w.lnRmssd !== undefined).length;
+  const hrvDays = useMemo(() => trainingWellness(training).filter((w) => w.lnRmssd !== undefined || w.lnSdnn !== undefined).length, [training]);
   const onFile = async (f: File) => {
     setError(undefined);
     setProgress(0);
