@@ -1,17 +1,6 @@
-# Preburner PWA Icon Placeholders
+# Preburner icons
 
-The `.png` files in this directory are plain-text placeholders so the CI/build
-pipeline can reference the expected filenames without shipping binary assets
-from the agent environment.
-
-Before releasing, replace each placeholder with the actual exported PNG icon of
-the indicated dimensions:
-
-- `icon-192.png` – 192×192 standard icon
-- `icon-512.png` – 512×512 standard icon
-- `icon-maskable-192.png` – 192×192 maskable icon with safe padding
-- `icon-maskable-512.png` – 512×512 maskable icon with safe padding
-
-All icons should follow the PWA manifest recommendations (square canvas,
-transparent background for maskable variants) and live in this directory with
-the same filenames referenced by `public/manifest.webmanifest`.
+The app's flame mark (ember → amber gradient, white lucide Flame), as in the
+header. `apple-touch-icon.png` is full-bleed and opaque because iOS rounds the
+corners itself and fills transparency with black; the maskable icons keep the
+flame inside the 80% safe zone.
