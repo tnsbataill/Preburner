@@ -50,13 +50,20 @@ export async function runCoach(opts: CoachRunOptions): Promise<CoachRunResult> {
   const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true, maxRetries: 2, fetch: opts.fetch });
   const messages: Anthropic.Beta.BetaMessageParam[] = [...opts.history, { role: 'user', content: opts.userText }];
   let proposal: Proposal | undefined;
+  // simulate_changes sends the unchanged baseline once per run, not every call.
+  const toolCtx = { baselineSent: false };
 
   for (let turn = 0; turn < 16; turn += 1) {
     const response = await client.beta.messages.create(
       {
         model: opts.model,
         max_tokens: 16000,
+        // Two cache points: the fixed tools + system prefix, and (automatic,
+        // top-level) the growing conversation, so each tool-loop turn and each
+        // follow-up question reads earlier turns from cache instead of paying
+        // full price for them again.
         system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+        cache_control: { type: 'ephemeral' },
         thinking: { type: 'adaptive' },
         output_config: { effort: 'high' },
         tools: COACH_TOOLS as unknown as Anthropic.Beta.BetaToolUnion[],
@@ -103,7 +110,7 @@ export async function runCoach(opts: CoachRunOptions): Promise<CoachRunResult> {
           proposal = toProposal(input);
           results.push({ type: 'tool_result', tool_use_id: tu.id, content: `Proposal recorded with ${proposal.changes.length} change(s). The athlete will review it. Now give your short explanation.` });
         } else {
-          results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(runTool(opts.world, tu.name, input)) });
+          results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(runTool(opts.world, tu.name, input, toolCtx)) });
         }
       } catch (err) {
         results.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: err instanceof Error ? err.message : String(err) });

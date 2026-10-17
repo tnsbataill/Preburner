@@ -89,7 +89,7 @@ export const COACH_TOOLS = [
   {
     name: 'simulate_changes',
     description:
-      'Apply a set of candidate changes in a sandbox and return the resulting weekly load/hours, CTL ramp, projected CTL and TSB on the event day, availability violations and how much of the weight-loss deficit fits. Use this to compare options before proposing.',
+      'Apply a set of candidate changes in a sandbox and return the resulting weekly load/hours, CTL ramp, projected CTL and TSB on the event day, availability violations and how much of the weight-loss deficit fits. The unchanged baseline comes with the first call only. Use this to compare options before proposing.',
     input_schema: {
       type: 'object',
       additionalProperties: false,
@@ -197,7 +197,12 @@ function outcome(world: CoachWorld, workouts: Workout[]) {
   };
 }
 
-export function runTool(world: CoachWorld, name: string, input: Record<string, unknown>): unknown {
+/** Per-run tool state: lets repeated simulations skip what the model already has. */
+export interface ToolContext {
+  baselineSent?: boolean;
+}
+
+export function runTool(world: CoachWorld, name: string, input: Record<string, unknown>, ctx: ToolContext = {}): unknown {
   switch (name) {
     case 'get_athlete_context': {
       const { profile, goals, schedule } = world.settings;
@@ -272,7 +277,10 @@ export function runTool(world: CoachWorld, name: string, input: Record<string, u
     case 'simulate_changes': {
       const changes = (input.changes ?? []) as Array<Omit<ProposalChange, 'id' | 'status'>>;
       const { workouts, errors } = applyChanges(world.workouts, changes, world.settings.profile.ftp);
-      return { baseline: outcome(world, world.workouts), withChanges: outcome(world, workouts), errors };
+      const withChanges = outcome(world, workouts);
+      if (ctx.baselineSent) return { baseline: 'unchanged: see the first simulate_changes result', withChanges, errors };
+      ctx.baselineSent = true;
+      return { baseline: outcome(world, world.workouts), withChanges, errors };
     }
     default:
       return { error: `unknown tool ${name}` };

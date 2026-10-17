@@ -32,6 +32,12 @@ describe('coach tools', () => {
     const sim = runTool(world, 'simulate_changes', { changes }) as any;
     expect(sim.errors).toEqual([]);
     expect(sim.withChanges.event.ctl).toBeGreaterThan(sim.baseline.event.ctl);
+    // Within one run the unchanged baseline is sent once, not with every option.
+    const ctx = {};
+    expect((runTool(world, 'simulate_changes', { changes }, ctx) as any).baseline.event).toBeDefined();
+    const again = runTool(world, 'simulate_changes', { changes }, ctx) as any;
+    expect(typeof again.baseline).toBe('string');
+    expect(again.withChanges.event.ctl).toBe(sim.withChanges.event.ctl);
   });
 
   it('refuses to touch completed sessions or unknown ids', () => {

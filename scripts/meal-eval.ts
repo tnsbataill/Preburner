@@ -22,7 +22,7 @@ const CONFIGS = [
   { model: 'claude-sonnet-5-5', effort: 'low' as const },
 ];
 // $ per million tokens (input, output)
-const PRICE: Record<string, [number, number]> = { 'claude-haiku-5-5': [1, 5], 'claude-sonnet-5-5': [3, 15] };
+const PRICE: Record<string, [number, number]> = { 'claude-haiku-5-5': [0.1, 0.5], 'claude-sonnet-5-5': [2, 10] };
 const JUDGE = 'claude-opus-5-5';
 
 const today = '2026-10-19';

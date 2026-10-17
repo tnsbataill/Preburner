@@ -5,7 +5,11 @@
 // turns would invalidate the model's thinking blocks.
 
 const KEY = 'preburner-v2-coach-history';
-const MAX_CHARS = 1_500_000;
+// Every follow-up question resends the whole transcript; after a pause longer
+// than the 5-minute cache it is all billed again as a cache write. ~400k chars
+// is about 100k tokens: plenty for a planning conversation, and it keeps a
+// stale follow-up well under a dollar on Opus.
+const MAX_CHARS = 400_000;
 
 export function loadCoachHistory(): unknown[] {
   try {

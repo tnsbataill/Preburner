@@ -62,6 +62,9 @@ describe('coach agent loop', () => {
     expect(body.fallbacks).toBe('default');
     expect(requests[0].headers.get('anthropic-beta')).toContain('server-side-fallback-2026-07-01');
     expect(body.tool_choice).toBeUndefined();
+    // Cached twice: the fixed prefix, and the growing conversation (top-level, automatic).
+    expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(body.cache_control).toEqual({ type: 'ephemeral' });
 
     // Each request extends the previous one without edits.
     for (let i = 1; i < requests.length; i += 1) {
