@@ -269,22 +269,94 @@ function ProjectionChart({ plan }: { plan: TrainingPlan }) {
   );
 }
 
+/** Time in each intensity band, from the sessions' steps (same cut-offs as the bars). */
+function weekBreakdown(ss: PlannedSession[]) {
+  const t = { low: 0, mid: 0, high: 0 };
+  for (const s of ss)
+    for (const st of s.steps) {
+      const x = (st.lo + st.hi) / 2;
+      t[x < 0.76 ? 'low' : x <= 1.05 ? 'mid' : 'high'] += st.durationS / 60;
+    }
+  return t;
+}
+
+const BANDS = [
+  { key: 'low', label: 'Endurance', color: 'rgb(var(--i-endurance))' },
+  { key: 'mid', label: 'Tempo–threshold', color: 'rgb(var(--i-threshold))' },
+  { key: 'high', label: 'VO2 and above', color: 'rgb(var(--i-vo2))' },
+] as const;
+
 function WeekBars({ plan }: { plan: TrainingPlan }) {
   const max = Math.max(...plan.weeks.map((w) => Math.max(w.plannedTss, w.targetTss)), 1);
+  const [active, setActive] = useState<number>();
+  const n = plan.weeks.length;
   return (
-    <div className="flex h-32 items-end gap-1.5" role="img" aria-label="Weekly load by intensity">
-      {plan.weeks.map((w) => {
+    <div className="relative flex h-32 items-end gap-1.5" role="list" aria-label="Weekly load by intensity" onMouseLeave={() => setActive(undefined)}>
+      {plan.weeks.map((w, i) => {
         const ss = plan.sessions.filter((s) => s.date >= w.start && s.date < addDays(w.start, 7));
         const d = ss.reduce((a, s) => ({ low: a.low + s.domain.low, mid: a.mid + s.domain.mid, high: a.high + s.domain.high }), { low: 0, mid: 0, high: 0 });
         const h = (v: number) => `${(v / max) * 100}%`;
+        const open = active === i;
+        const time = open ? weekBreakdown(ss) : undefined;
+        const total = time ? time.low + time.mid + time.high : 0;
+        const hard = ss.filter((s) => s.hard);
+        // Keep the card inside the chart at the edges.
+        const place = i < 2 ? 'left-0' : i > n - 3 ? 'right-0' : 'left-1/2 -translate-x-1/2';
         return (
-          <div key={w.index} className="flex h-full flex-1 flex-col items-center justify-end gap-1" title={`Week ${w.index + 1}: ${w.plannedTss} TSS, ${w.hours} h (${PHASE_LABEL[w.phase]})`}>
-            <div className="flex w-full flex-1 flex-col justify-end overflow-hidden rounded-md">
+          <div
+            key={w.index}
+            role="listitem"
+            tabIndex={0}
+            aria-label={`Week ${w.index + 1}, ${PHASE_LABEL[w.phase]}: ${w.hours} hours, ${w.plannedTss} TSS`}
+            className="relative flex h-full min-w-0 flex-1 cursor-default flex-col items-center justify-end gap-1 outline-none"
+            onMouseEnter={() => setActive(i)}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive(undefined)}
+            // A tap fires hover, focus and click together: open, never toggle shut.
+            // Tapping elsewhere blurs it closed.
+            onClick={() => setActive(i)}
+            data-testid="week-bar"
+          >
+            <div className={cx('flex w-full flex-1 flex-col justify-end overflow-hidden rounded-md transition', active !== undefined && !open && 'opacity-50')}>
               <div style={{ height: h(d.high), background: 'rgb(var(--i-vo2))' }} />
               <div style={{ height: h(d.mid), background: 'rgb(var(--i-threshold))' }} />
               <div style={{ height: h(d.low), background: 'rgb(var(--i-endurance) / 0.7)' }} />
             </div>
-            <div className={cx('text-[9px] font-semibold uppercase', w.phase === 'recovery' || w.phase === 'taper' || w.phase === 'test' ? 'text-good' : 'text-muted')}>{PHASE_LABEL[w.phase].slice(0, 3)}</div>
+            <div className={cx('text-[9px] font-semibold uppercase max-sm:text-[7px]', w.phase === 'recovery' || w.phase === 'taper' || w.phase === 'test' ? 'text-good' : 'text-muted')}>{PHASE_LABEL[w.phase].slice(0, 3)}</div>
+            {open && time && (
+              <div role="tooltip" className={cx('pointer-events-none absolute bottom-full z-20 mb-2 w-56 rounded-xl border border-line bg-surface p-3 text-left shadow-lg', place)} data-testid="week-tooltip">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-semibold">
+                    Week {w.index + 1} · {PHASE_LABEL[w.phase]}
+                  </span>
+                  <span className="text-[11px] text-muted">{formatDate(w.start)}</span>
+                </div>
+                <div className="num mt-1 text-sm">
+                  <b className="font-semibold">{formatDuration(Math.round(total))}</b>
+                  <span className="text-muted"> · {w.plannedTss} TSS</span>
+                </div>
+                <ul className="num mt-2 space-y-1 text-xs">
+                  {BANDS.map((b) => (
+                    <li key={b.key} className="flex items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: b.color }} />
+                      <span className="flex-1 text-muted">{b.label}</span>
+                      <span>{formatDuration(Math.round(time[b.key]))}</span>
+                      <span className="w-8 text-right text-faint">{total ? Math.round((time[b.key] / total) * 100) : 0}%</span>
+                    </li>
+                  ))}
+                </ul>
+                {hard.length > 0 && (
+                  <div className="mt-2 border-t border-line/70 pt-2 text-[11px] text-muted">
+                    {hard.map((s) => (
+                      <div key={s.id} className="truncate">
+                        {weekdayShort(s.date)} · {s.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {w.availabilityLimited && <div className="mt-1.5 text-[11px] text-warn">Capped by your available hours</div>}
+              </div>
+            )}
           </div>
         );
       })}

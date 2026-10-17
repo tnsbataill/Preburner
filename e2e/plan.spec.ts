@@ -159,3 +159,18 @@ test('a cut-short ride is asked about and the answer sticks', async ({ page }) =
   await page.reload();
   await expect(page.getByRole('group', { name: /Long endurance 3h was cut short/ })).toHaveCount(0);
 });
+
+test('hovering or tapping a week shows its hours and intensity breakdown', async ({ page }) => {
+  await onboardWithDemo(page);
+  await generate(page);
+  const bar = page.getByTestId('week-bar').nth(3);
+  await bar.hover();
+  const tip = page.getByTestId('week-tooltip');
+  await expect(tip).toContainText('Week 4');
+  await expect(tip).toContainText(/\dh\d\d|\dh|\d+m/);
+  for (const band of ['Endurance', 'Tempo–threshold', 'VO2 and above']) await expect(tip).toContainText(band);
+  await page.getByTestId('week-bar').nth(4).click();
+  await expect(tip).toContainText('Week 5');
+  // The chart never makes the page scroll sideways (phones included).
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
