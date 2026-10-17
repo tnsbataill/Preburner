@@ -52,7 +52,7 @@ export interface MealSuggestion {
   createdAt: string;
 }
 
-const SYSTEM = `You write simple meals for an endurance athlete that hit given macro targets. Use common whole foods and 2-5 ingredients, gram amounts rounded to sensible kitchen numbers (5 g steps, or whole units like "1 banana" with its weight). Per-item macros must be realistic for the food and amount (standard nutrition tables). Aim for each total within about 10% of target. Respect any timing guidance (e.g. low fat and low fibre before training).`;
+export const MEAL_SYSTEM = `You write simple meals for an endurance athlete that hit given macro targets. Use common whole foods and 2-5 ingredients in total (oil, butter and sauces count as ingredients), gram amounts rounded to sensible kitchen numbers (5 g steps, or whole units like "1 banana" with its weight). Per-item macros must be realistic for the food and amount (standard nutrition tables). Aim for each total within about 10% of target. Respect any timing guidance (e.g. low fat and low fibre before training).`;
 
 export interface SuggestMealOptions {
   apiKey: string;
@@ -61,28 +61,37 @@ export interface SuggestMealOptions {
   avoid?: string[];
   fetch?: typeof fetch;
   signal?: AbortSignal;
+  /** for comparing models (scripts/meal-eval.ts); the app uses the defaults */
+  model?: string;
+  effort?: 'low' | 'medium' | 'high';
+}
+
+/** The user message for one slot. */
+export function mealBrief(slot: MealSlot, avoid?: string[]): string {
+  const m = slot.macros;
+  return [
+    `${slot.label} at ${formatClock(slot.startMin)}.`,
+    `Targets: ${m.carbG} g carbs, ${m.proteinG} g protein, ${m.fatG} g fat (${slot.kcal} kcal).`,
+    slot.lowResidue ? 'Keep it low fat and low fibre: training follows soon.' : '',
+    slot.rationale ? `Why this meal: ${slot.rationale}` : '',
+    slot.ideas.length ? `Ideas that fit: ${slot.ideas.join('; ')}.` : '',
+    avoid?.length ? `Make it different from: ${avoid.join('; ')}.` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export async function suggestMeal(opts: SuggestMealOptions): Promise<MealSuggestion> {
   const { slot } = opts;
   const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true, maxRetries: 2, fetch: opts.fetch });
   const m = slot.macros;
-  const brief = [
-    `${slot.label} at ${formatClock(slot.startMin)}.`,
-    `Targets: ${m.carbG} g carbs, ${m.proteinG} g protein, ${m.fatG} g fat (${slot.kcal} kcal).`,
-    slot.lowResidue ? 'Keep it low fat and low fibre: training follows soon.' : '',
-    slot.rationale ? `Why this meal: ${slot.rationale}` : '',
-    slot.ideas.length ? `Ideas that fit: ${slot.ideas.join('; ')}.` : '',
-    opts.avoid?.length ? `Make it different from: ${opts.avoid.join('; ')}.` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const brief = mealBrief(slot, opts.avoid);
   const res = await client.messages.parse(
     {
-      model: MEAL_MODEL,
+      model: opts.model ?? MEAL_MODEL,
       max_tokens: 2000,
-      system: SYSTEM,
-      output_config: { effort: 'low', format: jsonSchemaOutputFormat(SCHEMA) },
+      system: MEAL_SYSTEM,
+      output_config: { effort: opts.effort ?? 'low', format: jsonSchemaOutputFormat(SCHEMA) },
       messages: [{ role: 'user', content: brief }],
     },
     { signal: opts.signal },
