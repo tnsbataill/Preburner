@@ -10,6 +10,7 @@ import { type AthleteSnapshot, type PlanOptions, planFromHistory } from '../trai
 import { readArchive, toRideRecords } from '../training/history/strava';
 import { readZipStream } from '../training/history/zip';
 import type { MissedReason, RideIssue } from '../training/history/types';
+import type { MealSuggestion } from '../coach/meal';
 import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation } from './training';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
@@ -41,6 +42,8 @@ export interface AppState {
   timeOverrides: Record<string, number>;
   /** meal slots ticked off, keyed `${date}|${kind}|${startMin}` */
   eaten: Record<string, true>;
+  /** AI-calculated meals, keyed like `eaten` (date|kind|start) */
+  mealSuggestions: Record<string, MealSuggestion>;
   /** sessions added locally (manual or accepted coach proposals in demo mode) */
   localWorkouts: Workout[];
   hiddenWorkoutIds: string[];
@@ -52,6 +55,7 @@ export interface AppState {
   patchSettings: <K extends keyof Settings>(key: K, patch: Partial<Settings[K]>) => void;
   setWorkoutTime: (id: string, min: number | null) => void;
   toggleEaten: (key: string) => void;
+  setMealSuggestion: (key: string, meal: MealSuggestion | undefined) => void;
   addWeight: (date: DateKey, kg: number) => void;
   loadDemo: () => void;
   sync: () => Promise<void>;
@@ -103,6 +107,7 @@ const initial = {
   ...demoState(DEFAULT_SETTINGS),
   timeOverrides: {},
   eaten: {},
+  mealSuggestions: {} as Record<string, MealSuggestion>,
   localWorkouts: [],
   hiddenWorkoutIds: [],
   coach: { messages: [], proposals: [] },
@@ -134,6 +139,17 @@ export const useApp = create<AppState>()(
           if (next[key]) delete next[key];
           else next[key] = true;
           return { eaten: next };
+        }),
+
+      setMealSuggestion: (key, meal) =>
+        set((s) => {
+          const next = { ...s.mealSuggestions };
+          if (meal) next[key] = meal;
+          else delete next[key];
+          // Keep the last 60; older days don't matter.
+          const keys = Object.keys(next).sort();
+          for (const k of keys.slice(0, Math.max(0, keys.length - 60))) delete next[k];
+          return { mealSuggestions: next };
         }),
 
       addWeight: (date, kg) =>

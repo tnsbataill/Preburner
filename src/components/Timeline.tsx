@@ -1,4 +1,5 @@
-import { Check, ChevronDown, Clock, Droplets, Pencil, Send, Zap } from 'lucide-react';
+import { Check, ChevronDown, Clock, Droplets, Loader2, Pencil, RefreshCw, Send, Sparkles, X, Zap } from 'lucide-react';
+import { type MealSuggestion, suggestMeal } from '../coach/meal';
 import { IntervalsClient } from '../intervals/client';
 import { useEffect, useRef, useState } from 'react';
 import { formatClock, formatDuration } from '../engine/time';
@@ -125,17 +126,20 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
           <Check size={16} strokeWidth={2.5} />
         </button>
       </div>
-      <button
-        aria-expanded={open}
-        onClick={(e) => {
-          stop(e);
-          setOpenToggle();
-        }}
-        className="mt-2 flex items-center gap-1 text-xs text-muted group-hover:text-ink"
-      >
-        <ChevronDown size={14} className={cx('transition', open && 'rotate-180')} />
-        {open ? 'Less' : 'Why & ideas'}
-      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <button
+          aria-expanded={open}
+          onClick={(e) => {
+            stop(e);
+            setOpenToggle();
+          }}
+          className="flex items-center gap-1 text-xs text-muted group-hover:text-ink"
+        >
+          <ChevronDown size={14} className={cx('transition', open && 'rotate-180')} />
+          {open ? 'Less' : 'Why & ideas'}
+        </button>
+      </div>
+      <CalculateMeal slotKeyId={key} slot={slot} />
       {open && (
         <div className="mt-2 space-y-2 animate-fade-up">
           <p className="text-sm text-muted">{slot.rationale}</p>
@@ -148,6 +152,90 @@ function MealCard({ date, slot, past }: { date: string; slot: MealSlot; past: bo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(5, 0.1 * b);
+
+/** "Calculate meal": a simple meal with gram amounts that hits this slot's macros. */
+function CalculateMeal({ slotKeyId, slot }: { slotKeyId: string; slot: MealSlot }) {
+  const apiKey = useApp((s) => s.connection.anthropicKey);
+  const meal = useApp((s) => s.mealSuggestions[slotKeyId]) as MealSuggestion | undefined;
+  const save = useApp((s) => s.setMealSuggestion);
+  const [state, setState] = useState<'idle' | 'busy' | 'nokey' | 'error'>('idle');
+  const [error, setError] = useState('');
+  const run = async (e: React.SyntheticEvent, avoid?: string[]) => {
+    stop(e);
+    if (!apiKey) return setState('nokey');
+    setState('busy');
+    try {
+      save(slotKeyId, await suggestMeal({ apiKey, slot, avoid }));
+      setState('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setState('error');
+    }
+  };
+  const m = slot.macros;
+  const stale = meal && (meal.target.carbG !== m.carbG || meal.target.proteinG !== m.proteinG || meal.target.fatG !== m.fatG);
+  if (!meal)
+    return (
+      <div className="mt-2" onClick={stop}>
+        <button onClick={(e) => void run(e)} disabled={state === 'busy'} className="inline-flex items-center gap-1 text-xs font-medium text-ember hover:underline disabled:opacity-60" data-testid="calculate-meal">
+          {state === 'busy' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          {state === 'busy' ? 'Calculating…' : 'Calculate meal'}
+        </button>
+        {state === 'nokey' && (
+          <p className="mt-1 text-xs text-muted">
+            Add your Anthropic API key in{' '}
+            <a href="#/settings" className="underline">
+              Settings
+            </a>{' '}
+            to calculate meals.
+          </p>
+        )}
+        {state === 'error' && <p className="mt-1 text-xs text-bad">{error}</p>}
+      </div>
+    );
+  return (
+    <div className="mt-3 rounded-xl border border-line/70 bg-raised/40 p-3" onClick={stop} data-testid="meal-suggestion">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-semibold">{meal.name}</div>
+        <div className="flex shrink-0 items-center gap-2 text-muted">
+          <button onClick={(e) => void run(e, [meal.name])} disabled={state === 'busy'} aria-label="Try another meal" title="Try another" className="hover:text-ink disabled:opacity-60">
+            {state === 'busy' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          </button>
+          <button onClick={(e) => (stop(e), save(slotKeyId, undefined))} aria-label="Remove meal" title="Remove" className="hover:text-ink">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+      <ul className="num mt-2 space-y-1 text-[13px]">
+        {meal.items.map((i) => (
+          <li key={i.food} className="flex justify-between gap-3">
+            <span>
+              <b className="font-semibold">{i.grams} g</b> {i.food}
+            </span>
+            <span className="shrink-0 text-xs text-muted">
+              {i.carbG}C · {i.proteinG}P · {i.fatG}F
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="num mt-2 border-t border-line/60 pt-2 text-xs text-muted">
+        Total{' '}
+        <span className={near(meal.totals.carbG, m.carbG) ? 'text-carb' : 'text-warn'}>{meal.totals.carbG} g carbs</span> ·{' '}
+        <span className={near(meal.totals.proteinG, m.proteinG) ? 'text-protein' : 'text-warn'}>{meal.totals.proteinG} g protein</span> ·{' '}
+        <span className={near(meal.totals.fatG, m.fatG) ? 'text-fat' : 'text-warn'}>{meal.totals.fatG} g fat</span> · {meal.totals.kcal} kcal
+      </div>
+      {meal.tip && <p className="mt-1.5 text-xs text-muted">{meal.tip}</p>}
+      {stale && (
+        <button onClick={(e) => void run(e)} className="mt-2 text-xs font-medium text-warn hover:underline">
+          Targets changed since this was made. Recalculate
+        </button>
+      )}
+      {state === 'error' && <p className="mt-1 text-xs text-bad">{error}</p>}
     </div>
   );
 }

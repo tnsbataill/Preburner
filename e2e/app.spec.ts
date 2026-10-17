@@ -75,6 +75,15 @@ test('coach explains what it needs without a key', async ({ page }) => {
   await expect(page.getByText('Anthropic API key (for the Coach)')).toBeVisible();
 });
 
+test('"Calculate meal" on a meal card asks for an Anthropic key when there is none', async ({ page }) => {
+  await onboardWithDemo(page);
+  const button = page.getByTestId('calculate-meal').first();
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(page.getByText('to calculate meals.').first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toHaveAttribute('href', '#/settings');
+});
+
 test('no horizontal scroll on any page', async ({ page }) => {
   await onboardWithDemo(page);
   for (const r of ['today', 'week', 'fitness', 'coach', 'settings']) {
