@@ -172,12 +172,12 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
           {objective === 'event' ? (
             <label className="block">
               <span className="label mb-1.5 block">Event date</span>
-              <input type="date" className={cx(inputCls, 'num min-h-[2.5rem]')} value={eventDate} min={addDays(start, 21)} onChange={(e) => setEventDate(e.target.value)} />
+              <input type="date" className={cx(inputCls, 'num h-10')} value={eventDate} min={addDays(start, 21)} onChange={(e) => setEventDate(e.target.value)} />
             </label>
           ) : (
             <label className="block">
               <span className="label mb-1.5 block">Length</span>
-              <select className={cx(inputCls, 'num min-h-[2.5rem]')} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} aria-label="Plan length in weeks">
+              <select className={cx(inputCls, 'num h-10')} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} aria-label="Plan length in weeks">
                 {DURATIONS.map((w) => (
                   <option key={w} value={w}>
                     {w} weeks
@@ -188,7 +188,7 @@ function SetupCard({ onDone }: { onDone?: () => void }) {
           )}
           <label className="block">
             <span className="label mb-1.5 block">Start</span>
-            <input type="date" className={cx(inputCls, 'num min-h-[2.5rem]')} value={start} min={today} onChange={(e) => setStart(e.target.value)} />
+            <input type="date" className={cx(inputCls, 'num h-10')} value={start} min={today} onChange={(e) => setStart(e.target.value)} />
           </label>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-3">
