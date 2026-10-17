@@ -48,9 +48,9 @@ export function activityToRide(a: IcuActivity, ftpFallback: number): RideRecord 
   const ftp = a.icu_ftp || ftpFallback;
   const ifactor = a.icu_intensity ? a.icu_intensity / 100 : a.icu_weighted_avg_watts ? a.icu_weighted_avg_watts / ftp : 0.65;
   const tss = a.icu_training_load ?? (secs / 3600) * ifactor * ifactor * 100;
+  const measured = zoneDomains(a.icu_zone_times, tss);
   const domain =
-    zoneDomains(a.icu_zone_times, tss) ??
-    (ifactor < 0.76 ? { low: tss, mid: 0, high: 0 } : ifactor < 0.95 ? { low: tss * 0.4, mid: tss * 0.6, high: 0 } : { low: tss * 0.3, mid: tss * 0.5, high: tss * 0.2 });
+    measured ?? (ifactor < 0.76 ? { low: tss, mid: 0, high: 0 } : ifactor < 0.95 ? { low: tss * 0.4, mid: tss * 0.6, high: 0 } : { low: tss * 0.3, mid: tss * 0.5, high: tss * 0.2 });
   return {
     id: `act-${a.id}`,
     date: at.date,
@@ -66,6 +66,7 @@ export function activityToRide(a: IcuActivity, ftpFallback: number): RideRecord 
     rpe: a.icu_rpe && a.icu_rpe >= 1 && a.icu_rpe <= 10 ? a.icu_rpe : undefined,
     feel: a.feel && a.feel >= 1 && a.feel <= 5 ? a.feel : undefined,
     plannedId: a.paired_event_id ? `icu-${a.paired_event_id}` : undefined,
+    ...(!measured && { estimated: true }),
     source: 'intervals',
   };
 }
@@ -101,7 +102,8 @@ export function mergeRides(...sources: RideRecord[][]): RideRecord[] {
       continue;
     }
     const o = out[dup];
-    const score = (x: RideRecord) => (x.rpe !== undefined ? 2 : 0) + (x.feel !== undefined ? 1 : 0) + (x.best5 !== undefined ? 1 : 0);
+    // Measured load wins first (RPE and feel are carried over either way).
+    const score = (x: RideRecord) => (x.estimated ? 0 : 4) + (x.rpe !== undefined ? 2 : 0) + (x.feel !== undefined ? 1 : 0) + (x.best5 !== undefined ? 1 : 0);
     const [keep, other] = score(r) > score(o) ? [r, o] : [o, r];
     out[dup] = {
       ...keep,

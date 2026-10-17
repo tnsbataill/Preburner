@@ -21,7 +21,7 @@ const app = planFromHistory(snap, { objective: 'ftp', weeks, start: '2026-10-19'
 const pj = app.plan.projection!;
 console.log(`APP (best builds on) genome ${JSON.stringify(app.plan.genome)} -> FTP ${pj.finalFtp.p10.toFixed(0)}-${pj.finalFtp.p90.toFixed(0)} (p50 ${pj.finalFtp.p50.toFixed(0)})`);
 const req = free.plan.request;
-// Shape of the 2022-23 and 2023-24 builds: long sweet-spot base, VO2 only late.
+// A hand-set comparison genome: sweet-spot/threshold base, a quarter of build hard days VO2.
 const personal: Genome = { cadence: 3, recoveryDepth: 0.6, rampPerWeek: 4, hardPerWeek: 3, vo2Share: 0.25, baseFrac: 0.7, baseThresholdShare: 0.33 };
 const mine = generatePlan(req, personal);
 const sp = scorePlan(mine, a.members, req.ctl, req.atl);

@@ -115,6 +115,8 @@ test('a history file (e.g. built from the Strava connector) drives the model and
   await expect(page.getByTestId('model-card')).toContainText('Estimated FTP');
   // The FTP-raising block in the history is found and offered as the plan shape.
   await expect(page.getByTestId('best-builds')).toContainText('Your FTP rose 280→300 W');
+  // Its hard days were sweet spot (mid), not VO2: the plan is pinned to that.
+  await expect(page.getByTestId('best-builds')).toContainText('almost no VO2 sessions');
   await page.getByTestId('generate-plan').click();
   await expect(page.getByTestId('plan-summary')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('plan-summary')).toContainText('80% range');
