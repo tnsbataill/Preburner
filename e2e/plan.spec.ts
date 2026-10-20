@@ -9,6 +9,7 @@ async function onboardWithDemo(page: Page) {
   await page.getByText('Explore with demo data first').click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Show my plan' }).click();
+  await page.getByRole('button', { name: 'Skip tour' }).click();
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 

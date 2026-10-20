@@ -8,6 +8,7 @@ async function onboardWithDemo(page: Page) {
   await page.getByText('Explore with demo data first').click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Show my plan' }).click();
+  await page.getByRole('button', { name: 'Skip tour' }).click();
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 
@@ -270,4 +271,49 @@ test('the week view shows power profiles on structured workouts', async ({ page 
   const box = await profile.boundingBox();
   expect(box!.width).toBeGreaterThan(40);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test('after setup, a tour walks through the app and ends on Today', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Explore with demo data first').click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Show my plan' }).click();
+  const callout = page.getByTestId('tour-callout');
+  await expect(page).toHaveURL(/#\/today$/);
+  const vp = page.viewportSize()!;
+  const seen: string[] = [];
+  for (;;) {
+    await expect(callout).toBeVisible();
+    // Wait for the callout to settle, then check it sits inside the screen.
+    await page.waitForTimeout(600);
+    seen.push(await callout.locator('h2').innerText());
+    const box = (await callout.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(vp.height);
+    const done = callout.getByRole('button', { name: 'Done', exact: true });
+    if (await done.isVisible()) {
+      await done.click();
+      break;
+    }
+    await callout.getByRole('button', { name: 'Next', exact: true }).click();
+  }
+  // Every step found its target; none was skipped.
+  expect(seen).toEqual(['Pick a day', 'Your day, in order', 'Daily targets', 'Fuel tank', 'Week', 'Plan', 'Fitness', 'Coach', 'Demo data', 'Settings']);
+  await expect(page.getByTestId('tour')).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/today$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('re-running setup from Settings finishes on Today, not back in Settings', async ({ page }) => {
+  await onboardWithDemo(page);
+  await page.goto('/#/settings?section=goals');
+  await page.getByRole('button', { name: 'Re-run setup' }).click();
+  await page.getByText('Explore with demo data first').click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Show my plan' }).click();
+  await page.getByRole('button', { name: 'Skip tour' }).click();
+  await expect(page).toHaveURL(/#\/today$/);
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 });

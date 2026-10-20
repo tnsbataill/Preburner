@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
 import { IntervalsKeyHelp } from '../components/IntervalsKeyHelp';
+import { useTour } from '../components/Tour';
 import { type LegacyImport, readLegacy } from '../state/migrate';
 import { useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
@@ -42,7 +43,12 @@ export function Onboarding() {
     if (!useApp.getState().connection.syncError) setStep('rhythm');
   };
 
-  const finish = () => s.update(() => ({ onboarded: true }));
+  // Land on Today whatever page was underneath (setup can be re-run from
+  // Settings), then walk through the app.
+  const finish = () => {
+    s.update(() => ({ onboarded: true }));
+    useTour.getState().start();
+  };
   const weekdayTime = schedule.defaultTrainingMin[2];
   const weekendTime = schedule.defaultTrainingMin[6];
   const setTraining = (days: Weekday[], v: number) => s.patchSettings('schedule', { defaultTrainingMin: { ...schedule.defaultTrainingMin, ...Object.fromEntries(days.map((d) => [d, v])) } });

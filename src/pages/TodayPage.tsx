@@ -249,7 +249,9 @@ export function TodayPage() {
 
   return (
     <div className="space-y-5">
-      <DateStrip days={strip} selected={day.date} today={today} onSelect={setDate} />
+      <div data-tour="date-strip">
+        <DateStrip days={strip} selected={day.date} today={today} onSelect={setDate} />
+      </div>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -272,12 +274,16 @@ export function TodayPage() {
           <AddedOnIntervalsCard day={day} />
           {isToday && <NextUp day={day} nowMin={nowMin} />}
           <CompactSummary day={day} />
-          <Timeline day={day} nowMin={isToday ? nowMin : undefined} />
+          <div data-tour="timeline">
+            <Timeline day={day} nowMin={isToday ? nowMin : undefined} />
+          </div>
           {day.date >= today && <PlanWorkoutButton key={day.date} date={day.date} />}
         </div>
         <div id="summary" className="scroll-mt-20 space-y-4 lg:sticky lg:top-8 lg:self-start">
-          <DaySummary day={day} weightKg={currentWeightKg} />
-          <Card className="p-5">
+          <div data-tour="summary">
+            <DaySummary day={day} weightKg={currentWeightKg} />
+          </div>
+          <Card className="p-5" data-tour="fuel-tank">
             <SectionTitle>Fuel tank</SectionTitle>
             <GlycogenChart points={plan.glycogen} day={day} nowMin={isToday ? nowMin : undefined} />
           </Card>

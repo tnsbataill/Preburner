@@ -5,6 +5,7 @@ import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
 import { AppleHealthImport } from '../components/AppleHealthImport';
 import { IntervalsKeyHelp } from '../components/IntervalsKeyHelp';
+import { useTour } from '../components/Tour';
 import { type Theme, useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
 import { Button, Card, ConfirmButton, cx, Field, inputCls, NumberInput, Segmented, Slider, Toggle } from '../ui/primitives';
@@ -324,6 +325,9 @@ export function SettingsPage() {
             <Upload size={16} /> Import
             <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importData(e.target.files[0])} />
           </label>
+          <Button variant="ghost" onClick={() => useTour.getState().start()}>
+            Take the tour
+          </Button>
           <Button variant="ghost" onClick={() => s.update(() => ({ onboarded: false }))}>
             Re-run setup
           </Button>
