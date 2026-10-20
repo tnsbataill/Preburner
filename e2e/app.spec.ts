@@ -79,7 +79,14 @@ test('the Intervals key helper walks through getting a key and pastes it into th
   await page.evaluate(() => navigator.clipboard.writeText('  test-key-123  '));
   await sheet.getByRole('button', { name: 'Paste my key' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByPlaceholder('Settings → Developer → API key')).toHaveValue('test-key-123');
+  await expect(page.getByLabel('Intervals.icu API key')).toHaveValue('test-key-123');
+
+  // Settings has the same helper beside its key field.
+  await onboardWithDemo(page);
+  await page.goto('/#/settings?section=connections');
+  await page.getByRole('button', { name: 'Help me get my key' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Paste my key' }).click();
+  await expect(page.getByLabel('Intervals.icu API key')).toHaveValue('test-key-123');
 });
 
 test('coach explains what it needs without a key', async ({ page }) => {

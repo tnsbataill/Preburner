@@ -15,7 +15,8 @@ const STEPS = [
   <>Come back here and paste it in.</>,
 ];
 
-/** A button that walks the user through getting a personal Intervals.icu API key. */
+/** A link-style button, beside the key field, that walks the user through
+ *  getting a personal Intervals.icu API key. */
 export function IntervalsKeyHelp({ onKey }: { onKey: (key: string) => void }) {
   const [open, setOpen] = useState(false);
   const [pasteError, setPasteError] = useState(false);
@@ -34,16 +35,16 @@ export function IntervalsKeyHelp({ onKey }: { onKey: (key: string) => void }) {
 
   return (
     <>
-      <Button
+      <button
         type="button"
-        variant="ghost"
+        className="inline-flex items-center gap-1 underline hover:text-ink"
         onClick={() => {
           setPasteError(false);
           setOpen(true);
         }}
       >
-        <HelpCircle size={16} /> Help me get my key
-      </Button>
+        <HelpCircle size={12} /> Help me get my key
+      </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Get your Intervals.icu API key">
         <p className="mb-4 text-sm text-muted">Preburner reads your training through a personal key. It takes about a minute, and the key stays in this browser.</p>
         <ol className="mb-5 space-y-3">

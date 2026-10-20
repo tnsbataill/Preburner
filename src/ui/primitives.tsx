@@ -201,15 +201,20 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   );
 }
 
-export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
+/** `action` sits beside the label like `hint`, but outside the <label>, so a
+ *  button there doesn't take the label from the input. */
+export function Field({ label, hint, action, children }: { label: ReactNode; hint?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
-    <label className="block">
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium">{label}</span>
-        {hint && <span className="text-xs text-muted">{hint}</span>}
-      </div>
-      {children}
-    </label>
+    <div className="relative">
+      <label className="block">
+        <div className={cx('mb-1.5 flex items-baseline justify-between gap-3', action != null && 'pr-40')}>
+          <span className="text-sm font-medium">{label}</span>
+          {hint && <span className="text-xs text-muted">{hint}</span>}
+        </div>
+        {children}
+      </label>
+      {action != null && <div className="absolute right-0 top-0 text-xs text-muted">{action}</div>}
+    </div>
   );
 }
 

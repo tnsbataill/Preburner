@@ -113,7 +113,7 @@ export function SettingsPage() {
 
       <Section id="connections" title="Connections" desc="Keys are stored only in this browser and sent only to Intervals.icu and Anthropic.">
         <div className="space-y-3">
-          <Field label="Intervals.icu API key" hint={<a className="underline" href="https://intervals.icu/settings" target="_blank" rel="noreferrer">Settings → Developer</a>}>
+          <Field label="Intervals.icu API key" action={<IntervalsKeyHelp onKey={setKeyDraft} />}>
             <SecretInput value={keyDraft} onChange={setKeyDraft} placeholder="paste your personal API key" />
           </Field>
           <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +128,6 @@ export function SettingsPage() {
             ) : (
               <span className="text-xs text-muted">Currently showing demo data.</span>
             )}
-            {(!s.connection.intervalsKey || s.connection.syncError) && <IntervalsKeyHelp onKey={setKeyDraft} />}
           </div>
           {s.connection.syncError && <p className="rounded-xl bg-bad/10 p-3 text-sm text-bad">{s.connection.syncError}</p>}
           {s.connection.mode === 'intervals' && s.connection.lastSync && !s.connection.syncError && (

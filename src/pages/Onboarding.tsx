@@ -80,16 +80,13 @@ export function Onboarding() {
               </div>
             )}
             <div className="card space-y-3 p-5">
-              <Field label="Intervals.icu API key" hint={<a className="underline" href="https://intervals.icu/settings" target="_blank" rel="noreferrer">where do I find it?</a>}>
+              <Field label="Intervals.icu API key" action={<IntervalsKeyHelp onKey={setKey} />}>
                 <input type="password" autoComplete="off" className={cx(inputCls, 'font-mono text-xs')} placeholder="Settings → Developer → API key" value={key} onChange={(e) => setKey(e.target.value)} />
               </Field>
               <Button variant="primary" className="w-full" disabled={!key.trim() || s.syncing} onClick={() => void connect()}>
                 {s.syncing ? <RefreshCw size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Intervals.icu
               </Button>
               {s.connection.syncError && <p className="text-sm text-bad">{s.connection.syncError}</p>}
-              <div className="flex justify-center">
-                <IntervalsKeyHelp onKey={setKey} />
-              </div>
             </div>
             <button
               onClick={() => {
