@@ -36,6 +36,8 @@ export interface RideReview {
   /** other rides that arrived in the same sync (their changes are mixed together) */
   batch?: string[];
   doneAt?: string;
+  /** what had changed when the review was marked done (kept as it was then) */
+  changes?: PlanChange[];
 }
 
 /** What the athlete says about a ride Intervals could only see via Strava. */
@@ -52,10 +54,11 @@ export type PlanChange =
   | { type: 'added'; title: string; date: DateKey }
   | { type: 'removed'; title: string; date: DateKey };
 
-const REVIEW_DAYS = 2;
+// Unreviewed rides stay in the queue for a week (a ride can sit a few days before the app is opened).
+const REVIEW_DAYS = 7;
 const KEEP = 30;
 
-/** Rides that count as "new" for review: the last couple of days, with or without data. */
+/** Rides that count as "new" for review: the last week, with or without data. */
 export function reviewCandidates(intervalsRides: RideRecord[], stravaRides: RideRecord[], today: DateKey): RideRecord[] {
   return mergeRides(intervalsRides, stravaRides).filter((r) => r.date >= addDays(today, -REVIEW_DAYS) && r.date <= today && (r.noData || r.durationMin >= 10) && !r.isTest);
 }

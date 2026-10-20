@@ -13,7 +13,7 @@ import type { MissedReason, RideIssue } from '../training/history/types';
 import type { MealSuggestion } from '../coach/meal';
 import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation, trainingWellness } from './training';
 import { readHealthExport } from '../health/appleHealth';
-import { type RideDetails, queueReviews, reviewCandidates, snapshotPlan } from '../training/review';
+import { type RideDetails, planChanges, queueReviews, reviewCandidates, snapshotPlan } from '../training/review';
 import { recentBodyFat } from '../health/merge';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
@@ -327,7 +327,10 @@ export const useApp = create<AppState>()(
       markReviewed: (rideId) =>
         set((s) => {
           const r = s.training.reviews?.[rideId];
-          return r ? { training: { ...s.training, reviews: { ...s.training.reviews, [rideId]: { ...r, doneAt: new Date().toISOString() } } } } : {};
+          if (!r) return {};
+          // Freeze the summary: later changes belong to later rides and days.
+          const changes = planChanges(r.baseline, s.training.plan?.sessions, todayKey(s.settings.profile.timezone));
+          return { training: { ...s.training, reviews: { ...s.training.reviews, [rideId]: { ...r, doneAt: new Date().toISOString(), changes } } } };
         }),
 
       setRideDetails: (rideId, details) =>

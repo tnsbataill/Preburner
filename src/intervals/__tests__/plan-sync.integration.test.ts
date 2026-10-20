@@ -224,4 +224,28 @@ describe('training plan <-> Intervals.icu', () => {
     useApp.getState().markReviewed('act-strava2');
     expect(useApp.getState().training.reviews!['act-strava2'].doneAt).toBeDefined();
   });
+  it('rating a planned ride in its review changes the plan, and the review says what changed', async () => {
+    const { isQuality } = await import('../../training/adapt');
+    const { planChanges } = await import('../../training/review');
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(-10), optimize: false });
+    const session = useApp
+      .getState()
+      .training.plan!.sessions.filter((x) => x.date >= d(-6) && x.date <= today && isQuality(x))
+      .at(-1)!;
+    // The ride that executed it arrives with the next sync.
+    fake.activities.push({ ...fake.activities[1], id: 'match1', start_date_local: `${session.date}T18:00:00`, moving_time: session.durationMin * 60, icu_training_load: session.tss, icu_rpe: undefined, feel: undefined } as never);
+    await useApp.getState().sync();
+    const review = useApp.getState().training.reviews!['act-match1'];
+    expect(review).toBeDefined();
+    const ride = historyRides(useApp.getState().training).find((r) => r.id === 'act-match1')!;
+    expect(ride.plannedId).toBe(session.id);
+    // Far harder than it should have felt: the next sessions of this kind step back.
+    await useApp.getState().setFeedback('act-match1', { rpe: 10 });
+    const changes = planChanges(review.baseline, useApp.getState().training.plan!.sessions, today);
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.some((c) => c.type === 'easier' || c.type === 'harder')).toBe(true);
+    // Done freezes the summary as it was.
+    useApp.getState().markReviewed('act-match1');
+    expect(useApp.getState().training.reviews!['act-match1'].changes).toEqual(changes);
+  });
 });

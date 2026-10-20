@@ -48,7 +48,7 @@ export function NewRideCard() {
   const pending = useMemo(() => {
     const all = reviewCandidates(training.intervalsRides, training.stravaRides, today);
     return Object.values(training.reviews ?? {})
-      .filter((r) => !r.doneAt && r.date >= addDays(today, -2))
+      .filter((r) => !r.doneAt && r.date >= addDays(today, -7))
       .map((r) => ({ review: r, ride: historyRides(training).find((x) => x.id === r.rideId) ?? all.find((x) => x.id === r.rideId) }))
       .filter((x): x is { review: typeof x.review; ride: RideRecord } => !!x.ride && !training.rideDetails?.[x.ride.id]?.notRide)
       .sort((a, b) => (a.ride.date < b.ride.date ? 1 : -1));
@@ -182,7 +182,7 @@ export function ReviewPage() {
   const review = rideId ? training.reviews?.[rideId] : undefined;
   const plan = training.plan;
   const session = ride?.plannedId ? plan?.sessions.find((s) => s.id === ride.plannedId) : undefined;
-  const changes = useMemo(() => (review ? planChanges(review.baseline, plan?.sessions, today) : []), [review, plan, today]);
+  const changes = useMemo(() => (review?.changes ?? (review ? planChanges(review.baseline, plan?.sessions, today) : [])), [review, plan, today]);
   const fitness = useMemo(() => {
     if (!ride || ride.noData) return undefined;
     const rides = historyRides(training);
@@ -254,7 +254,7 @@ export function ReviewPage() {
       </Card>
 
       <Card className="p-5" data-testid="review-changes">
-        <SectionTitle>What changed</SectionTitle>
+        <SectionTitle>Since this ride came in</SectionTitle>
         {fitness && (
           <p className="num text-sm">
             Fitness (CTL) {signed(fitness.ctl, 1)} · form tomorrow {signed(fitness.form)}
@@ -289,6 +289,9 @@ export function ReviewPage() {
             </Chip>
           )}
         </div>
+        {plan && ride.date === today && !review?.doneAt && (
+          <p className="mt-3 text-xs text-muted">The plan's daily review looks at today's rides tomorrow morning; anything it changes will show here until you tap Done.</p>
+        )}
         {review?.batch && review.batch.length > 1 && <p className="mt-3 text-xs text-muted">This arrived with {review.batch.length - 1} other {review.batch.length === 2 ? 'ride' : 'rides'}; the changes include theirs.</p>}
       </Card>
 
