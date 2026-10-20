@@ -2,6 +2,7 @@ import { ArrowRight, Flame, Link2, PlayCircle, RefreshCw, Sparkles } from 'lucid
 import { useEffect, useState } from 'react';
 import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
+import { IntervalsKeyHelp } from '../components/IntervalsKeyHelp';
 import { type LegacyImport, readLegacy } from '../state/migrate';
 import { useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
@@ -86,6 +87,9 @@ export function Onboarding() {
                 {s.syncing ? <RefreshCw size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Intervals.icu
               </Button>
               {s.connection.syncError && <p className="text-sm text-bad">{s.connection.syncError}</p>}
+              <div className="flex justify-center">
+                <IntervalsKeyHelp onKey={setKey} />
+              </div>
             </div>
             <button
               onClick={() => {

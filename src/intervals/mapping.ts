@@ -142,6 +142,7 @@ export function eventToWorkout(e: IcuEvent, ftpFallback: number): Workout | unde
     category: e.category,
     description: e.description,
     externalId: e.external_id,
+    tags: e.tags,
   };
 }
 

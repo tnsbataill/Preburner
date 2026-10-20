@@ -60,6 +60,19 @@ export interface TrainingState {
   reviews?: Record<string, RideReview>;
   /** duration etc. the athlete gave for rides Intervals only saw via Strava */
   rideDetails?: Record<string, RideDetails>;
+  /** planned events that showed up on Intervals after the plan was made, by
+   *  workout id; they stay on the calendar beside the plan */
+  addedExternal?: Record<string, { date: DateKey; seen?: boolean }>;
+  /** plan sessions the athlete swapped for a workout added on Intervals
+   *  ("ride it instead"), keyed by session id: off the calendar, never asked
+   *  about as missed, and a ride that day counts as that session */
+  replacedSessions?: Record<string, { by: string; date: DateKey }>;
+}
+
+/** Swapped for another workout. The date must match: session ids repeat
+ *  across replans and new plans over the same weeks. */
+export function isReplaced(t: Pick<TrainingState, 'replacedSessions'>, s: PlannedSession): boolean {
+  return t.replacedSessions?.[s.id]?.date === s.date;
 }
 
 export const INITIAL_TRAINING: TrainingState = {
@@ -99,6 +112,7 @@ export function historyRides(t: TrainingState): RideRecord[] {
     byDate.set(s.date, s);
     byId.set(s.id, s);
   }
+  const replaced = t.replacedSessions ?? {};
   // A no-data activity (it reached Intervals only via Strava) on a planned day
   // with nothing better that day: assume the session was ridden as planned
   // rather than call it skipped. Anywhere else it could be anything (a walk,
@@ -116,9 +130,10 @@ export function historyRides(t: TrainingState): RideRecord[] {
     const issue = t.rideIssues?.[r.id];
     // A ride on a plan day executed that session: tag it so RPE steers the
     // right progression. A ride the athlete said was a cut-short session is
-    // tagged however short it was.
+    // tagged however short it was, and a ride on a day the athlete swapped the
+    // session for another workout however different it was.
     const s = (issue?.sessionId && byId.get(issue.sessionId)) || byDate.get(r.date);
-    const matches = s && (issue?.sessionId === s.id || Math.abs(s.durationMin - r.durationMin) <= Math.max(20, 0.5 * s.durationMin));
+    const matches = s && (issue?.sessionId === s.id || replaced[s.id]?.date === r.date || Math.abs(s.durationMin - r.durationMin) <= Math.max(20, 0.5 * s.durationMin));
     return {
       ...r,
       rpe: fb?.rpe ?? r.rpe,
@@ -171,6 +186,8 @@ export function debriefQueue(t: TrainingState, today: DateKey): DebriefItem[] {
   const out: DebriefItem[] = [];
   for (const s of t.plan.sessions) {
     if (s.date < addDays(today, -3) || s.date >= today || s.date < t.plan.request.start || !worthAsking(s)) continue;
+    // Swapped for another workout: whatever was ridden, it wasn't this.
+    if (isReplaced(t, s)) continue;
     const onDay = rides.filter((r) => r.date === s.date && r.durationMin > 0);
     if (!onDay.length) {
       if (!t.missedReasons?.[s.id]) out.push({ type: 'missed', session: s });
@@ -252,7 +269,7 @@ export function runAdaptation(t: TrainingState, today: DateKey, ftp: number, cfg
   // Only readiness swaps count toward its cap; "I was sick" swaps don't.
   const recentDowngrades = t.adjustments.filter((a) => a.action === 'downgrade' && a.source !== 'debrief').map((a) => a.date);
   const working = mode === 'intervals' ? ftp : (t.ftp ?? ftp);
-  const out = adaptDay({ plan, today, since, rides, wellness: trainingWellness(t), ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {} }, cfg);
+  const out = adaptDay({ plan, today, since, rides, wellness: trainingWellness(t), ftpSet: working, tsb, reviewed: t.reviewedRides, recentDowngrades, missedReasons: t.missedReasons ?? {}, replaced: t.replacedSessions }, cfg);
   const ftpAdj = out.adjustments.filter((a) => a.action === 'ftp').at(-1);
   // Intervals resolves %FTP against its own FTP: suggest, don't silently diverge.
   const ftpPatch: Partial<TrainingState> =
@@ -295,7 +312,7 @@ export function mergePlanIntoCalendar(workouts: Workout[], t: TrainingState, tod
   const start = plan.request.start;
   const end = planEnd(plan);
   const inWindow = (d: DateKey) => d >= start && d <= end;
-  const current = new Set(plan.sessions.map((s) => s.id));
+  const current = new Set(plan.sessions.filter((s) => !isReplaced(t, s)).map((s) => s.id));
   const synced = new Set(workouts.map((w) => planSessionId(w)).filter((x): x is string => !!x));
   const dirty = new Set(t.dirtyIds);
   const kept = workouts.filter((w) => {
@@ -304,14 +321,39 @@ export function mergePlanIntoCalendar(workouts: Workout[], t: TrainingState, tod
     // and haven't changed locally since they were sent.
     if (sid) return !w.completed && w.date >= today ? mode === 'intervals' && current.has(sid) && !dirty.has(sid) : true;
     if (w.completed || !inWindow(w.date) || w.date < today) return true;
-    // Races and sessions the athlete added by hand always stay.
-    if (/^RACE_/.test(w.category ?? '') || w.source === 'manual') return true;
+    // Races and sessions the athlete added by hand (here, or on Intervals
+    // after the plan was made) always stay.
+    if (/^RACE_/.test(w.category ?? '') || w.source === 'manual' || t.addedExternal?.[w.id]) return true;
     return !t.replaceExternal;
   });
   const local = plan.sessions
-    .filter((s) => s.date >= today && !(mode === 'intervals' && synced.has(s.id) && !dirty.has(s.id)))
+    .filter((s) => s.date >= today && current.has(s.id) && !(mode === 'intervals' && synced.has(s.id) && !dirty.has(s.id)))
     .map((s) => sessionToWorkout(s, t.ftp ?? ftp));
   return [...kept, ...local];
+}
+
+/**
+ * Planned events new on Intervals since the last sync, inside a plan's window:
+ * the athlete put something on the calendar the plan doesn't know about (a
+ * group ride, a workout from elsewhere). TrainerRoad's own events don't count:
+ * the plan replaces those, and TrainerRoad can re-create them with new ids.
+ * The first time (nothing tracked yet), every such event the app already has
+ * counts, so one added before this ran isn't hidden for good.
+ * Flags only accumulate; old ones drop off once their day has passed.
+ */
+export function detectAddedEvents(t: TrainingState, before: Workout[], after: Workout[], today: DateKey): TrainingState['addedExternal'] {
+  const plan = t.plan;
+  if (!plan) return t.addedExternal;
+  const kept = Object.fromEntries(Object.entries(t.addedExternal ?? {}).filter(([, v]) => v.date >= addDays(today, -7)));
+  const known = new Set(t.addedExternal ? before.map((w) => w.id) : []);
+  const end = planEnd(plan);
+  for (const w of after) {
+    if (known.has(w.id) || kept[w.id] || w.completed || w.source !== 'intervals' || planSessionId(w)) continue;
+    if (w.date < today || w.date < plan.request.start || w.date > end) continue;
+    if (/^RACE_/.test(w.category ?? '') || w.tags?.some((x) => /trainerroad/i.test(x))) continue;
+    kept[w.id] = { date: w.date };
+  }
+  return kept;
 }
 
 const PLAN_PREFIX = 'preburner-plan-';
@@ -323,10 +365,12 @@ export function planSessionId(w: Workout): string | undefined {
 /**
  * What to write to Intervals so the calendar matches the current plan:
  * upsert future sessions that are new or changed, delete future plan events
- * that aren't in the plan any more (replans, a new plan over an old one).
+ * that aren't in the plan any more (replans, a new plan over an old one, a
+ * session the athlete swapped for another workout).
  */
-export function reconcilePlanEvents(plan: TrainingPlan | undefined, synced: Workout[], t: Pick<TrainingState, 'dirtyIds'>, today: DateKey, schedule: Schedule): { upsert: NewEvent[]; deleteIds: number[] } {
-  const future = (plan?.sessions ?? []).filter((s) => s.date >= today);
+export function reconcilePlanEvents(plan: TrainingPlan | undefined, synced: Workout[], t: Pick<TrainingState, 'dirtyIds' | 'replacedSessions'>, today: DateKey, schedule: Schedule): { upsert: NewEvent[]; deleteIds: number[] } {
+  // Sessions swapped for another workout come off Intervals too.
+  const future = (plan?.sessions ?? []).filter((s) => s.date >= today && !isReplaced(t, s));
   const current = new Set(future.map((s) => s.id));
   const onCalendar = new Set(synced.map(planSessionId).filter((x): x is string => !!x));
   const upsert = future.filter((s) => !onCalendar.has(s.id) || t.dirtyIds.includes(s.id)).map((s) => sessionEvent(s, schedule));

@@ -255,6 +255,16 @@ function SendFuelToIntervals({ workout, carbPerHour }: { workout: ResolvedWorkou
   );
 }
 
+/** Sessions planned in the app can be taken off again. */
+function RemoveManual({ id }: { id: string }) {
+  const remove = useApp((s) => s.removeLocalWorkout);
+  return (
+    <button onClick={() => remove(id)} className="ml-3 inline-flex items-center gap-1 text-xs text-muted hover:text-bad">
+      <X size={11} /> Remove
+    </button>
+  );
+}
+
 function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorkout }) {
   const [editing, setEditing] = useState(false);
   const color = INTENSITY_COLOR[workout.intensity];
@@ -359,6 +369,7 @@ function SessionCard({ slot, workout }: { slot: MealSlot; workout: ResolvedWorko
                 </button>
               )}
               {f && f.carbPerHour > 0 && <SendFuelToIntervals workout={workout} carbPerHour={f.carbPerHour} />}
+              {workout.source === 'manual' && !workout.completed && <RemoveManual id={workout.id} />}
             </div>
           </div>
         )}

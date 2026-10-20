@@ -67,6 +67,21 @@ test('fitness page projects toward a goal event', async ({ page }) => {
   await expect(page.getByText('Fitness on the day')).toBeVisible();
 });
 
+test('the Intervals key helper walks through getting a key and pastes it into the field', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Help me get my key' }).click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByText('Developer Settings')).toBeInViewport();
+  const popup = page.waitForEvent('popup');
+  await sheet.getByRole('button', { name: 'Open Intervals.icu' }).click();
+  expect((await popup).url()).toContain('intervals.icu/settings');
+  await page.evaluate(() => navigator.clipboard.writeText('  test-key-123  '));
+  await sheet.getByRole('button', { name: 'Paste my key' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByPlaceholder('Settings → Developer → API key')).toHaveValue('test-key-123');
+});
+
 test('coach explains what it needs without a key', async ({ page }) => {
   await onboardWithDemo(page);
   await page.goto('/#/coach');
@@ -169,4 +184,66 @@ test('a new ride is reviewed: card on Today, review screen, answers saved, then 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
   await expect(left).toHaveCount(before - 1);
+});
+
+test('a workout planned by calorie burn joins the day, persists, and can be removed', async ({ page }) => {
+  await onboardWithDemo(page);
+  const training = async () => Number((await page.locator('span', { hasText: /^Training [\d,]+$/ }).first().innerText()).replace(/\D/g, ''));
+  const before = await training();
+  await page.getByRole('button', { name: 'Plan a workout' }).click();
+  await page.getByLabel('Calories burned').fill('1000');
+  await page.getByLabel('Duration').fill('120');
+  await page.getByLabel('Start time').fill('12:00');
+  await page.getByLabel('Name').fill('Lunch spin');
+  // 1000 kcal at 22% gross efficiency is 920 kJ of work.
+  await expect(page.getByTestId('plan-preview')).toContainText('920 kJ');
+  const net = Number((await page.getByTestId('plan-preview').innerText()).match(/Adds (\d+) kcal/)![1]);
+  await page.getByRole('button', { name: 'Add workout' }).click();
+  const card = page.getByText('Lunch spin').first();
+  await expect(card).toBeVisible();
+  // Today's training burn goes up by the ride less the resting energy it replaces
+  // (about 190 kcal over two hours), as the sheet said it would.
+  await expect.poll(training).toBeGreaterThan(before + 700);
+  expect(await training()).toBeLessThan(before + 950);
+  expect(Math.abs((await training()) - before - net)).toBeLessThanOrEqual(2);
+  await page.reload();
+  await expect(page.getByText('Lunch spin').first()).toBeVisible();
+  await card.click();
+  await page.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.getByText('Lunch spin')).toHaveCount(0);
+  await expect.poll(training).toBe(before);
+});
+
+test('"Ride it instead" swaps a plan session for a workout added on Intervals, and it stays swapped', async ({ page }) => {
+  await onboardWithDemo(page);
+  await page.goto('/#/plan');
+  await page.getByRole('checkbox', { name: /Optimise for me/ }).uncheck();
+  await page.getByTestId('generate-plan').click();
+  await expect(page.getByTestId('apply-plan')).toBeVisible();
+  // What a sync would record when a workout shows up on Intervals after the
+  // plan was made (demo mode never syncs): flag a demo workout on a plan day.
+  const { date, workoutTitle, sessionTitle } = await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem('preburner-v2')!);
+    const { plan } = raw.state.training;
+    const s = plan.sessions.find((x: { date: string }) => raw.state.workouts.some((w: { date: string }) => w.date === x.date));
+    const w = raw.state.workouts.find((x: { date: string }) => x.date === s.date);
+    raw.state.training.addedExternal = { [w.id]: { date: s.date } };
+    localStorage.setItem('preburner-v2', JSON.stringify(raw));
+    return { date: s.date as string, workoutTitle: w.title as string, sessionTitle: s.title as string };
+  });
+  await page.goto(`/#/today?date=${date}`);
+  await page.reload();
+  const card = page.getByTestId('added-on-intervals');
+  await expect(card).toContainText(workoutTitle);
+  await expect(card).toContainText(`alongside ${sessionTitle}`);
+  const title = (t: string) => page.getByText(t, { exact: true });
+  await expect(title(sessionTitle).first()).toBeVisible();
+  await card.getByRole('button', { name: 'Ride it instead' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(title(sessionTitle)).toHaveCount(0);
+  await expect(title(workoutTitle).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('added-on-intervals')).toHaveCount(0);
+  await expect(title(sessionTitle)).toHaveCount(0);
+  await expect(title(workoutTitle).first()).toBeVisible();
 });

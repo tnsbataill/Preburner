@@ -224,6 +224,7 @@ describe('training plan <-> Intervals.icu', () => {
     useApp.getState().markReviewed('act-strava2');
     expect(useApp.getState().training.reviews!['act-strava2'].doneAt).toBeDefined();
   });
+
   it('rating a planned ride in its review changes the plan, and the review says what changed', async () => {
     const { isQuality } = await import('../../training/adapt');
     const { planChanges } = await import('../../training/review');
@@ -247,5 +248,94 @@ describe('training plan <-> Intervals.icu', () => {
     // Done freezes the summary as it was.
     useApp.getState().markReviewed('act-match1');
     expect(useApp.getState().training.reviews!['act-match1'].changes).toEqual(changes);
+  });
+  it('a workout added on Intervals after the plan was made shows beside the plan; TrainerRoad re-syncs stay hidden', async () => {
+    const { mergePlanIntoCalendar } = await import('../../state/training');
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    await useApp.getState().sync();
+    // Between syncs the athlete adds a group ride; TrainerRoad re-creates a workout under a new id.
+    fake.events.push(
+      { id: 900, start_date_local: `${d(2)}T09:00:00`, category: 'WORKOUT', type: 'Ride', name: 'Saturday group ride', moving_time: 10800, icu_training_load: 150 },
+      { id: 901, start_date_local: `${d(3)}T00:00:00`, category: 'WORKOUT', type: 'VirtualRide', name: 'TR VO2 5x3', moving_time: 3600, icu_training_load: 70, tags: ['trainerroad'] },
+    );
+    await useApp.getState().sync();
+    const s = useApp.getState();
+    expect(s.training.addedExternal).toEqual({ 'icu-900': { date: d(2) } });
+    const cal = mergePlanIntoCalendar(s.workouts, s.training, today, 'intervals', 305);
+    expect(cal.find((w) => w.id === 'icu-900')).toMatchObject({ date: d(2), title: 'Saturday group ride' });
+    expect(cal.find((w) => w.title === 'TR VO2 5x3' || w.title === 'TR Threshold 3x12')).toBeUndefined();
+    // The flag survives the next sync, when the event is no longer new.
+    await useApp.getState().sync();
+    expect(useApp.getState().training.addedExternal?.['icu-900']).toBeDefined();
+    // "Leave it out" dismisses the notice and hides the event.
+    useApp.getState().acknowledgeAdded('icu-900', true);
+    expect(useApp.getState().training.addedExternal?.['icu-900']).toMatchObject({ seen: true });
+    expect(useApp.getState().hiddenWorkoutIds).toContain('icu-900');
+  });
+
+  it('a workout already on Intervals before this was tracked is shown too (first detection flags what the app already has)', async () => {
+    const { mergePlanIntoCalendar } = await import('../../state/training');
+    fake.events.push({ id: 902, start_date_local: `${d(4)}T07:00:00`, category: 'WORKOUT', type: 'Ride', name: 'Club TT', moving_time: 3600, icu_training_load: 80 });
+    await useApp.getState().sync();
+    // State from before added events were tracked: the event is already known.
+    useApp.setState((st) => ({ training: { ...st.training, addedExternal: undefined } }));
+    await useApp.getState().sync();
+    const s = useApp.getState();
+    expect(s.training.addedExternal?.['icu-902']).toEqual({ date: d(4) });
+    expect(s.training.addedExternal?.['icu-901']).toBeUndefined();
+    expect(mergePlanIntoCalendar(s.workouts, s.training, today, 'intervals', 305).find((w) => w.id === 'icu-902')).toBeDefined();
+  });
+
+  it('"ride it instead" swaps the plan session for the added workout: off the calendar and Intervals, not missed, and the ride counts as it', async () => {
+    const { debriefQueue, mergePlanIntoCalendar } = await import('../../state/training');
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    await useApp.getState().applyTrainingPlan();
+    // A hard or long session on a day nothing else was added to.
+    const session = useApp.getState().training.plan!.sessions.find((x) => x.date >= d(5) && (x.hard || x.kind === 'long'))!;
+    const day = session.date;
+    expect(fake.planEvents().some((e) => e.external_id === `preburner-plan-${session.id}`)).toBe(true);
+    fake.events.push({ id: 903, start_date_local: `${day}T09:00:00`, category: 'WORKOUT', type: 'Ride', name: 'Club hill reps', moving_time: 7200, icu_training_load: 110 });
+    await useApp.getState().sync();
+    const onDay = () => {
+      const s = useApp.getState();
+      return mergePlanIntoCalendar(s.workouts, s.training, today, 'intervals', 305).filter((w) => w.date === day && !w.completed);
+    };
+    // Until the athlete chooses, both are on the day.
+    expect(onDay().map((w) => w.id).sort()).toEqual(['icu-903', expect.stringMatching(/^icu-/)].sort());
+    // Without the swap, skipping the session would be asked about the day after.
+    expect(debriefQueue(useApp.getState().training, addDays(day, 1)).map((x) => x.session.id)).toContain(session.id);
+
+    useApp.getState().replaceWithAdded('icu-903');
+    const t = useApp.getState().training;
+    expect(t.replacedSessions?.[session.id]).toEqual({ by: 'icu-903', date: day });
+    expect(t.addedExternal?.['icu-903']?.seen).toBe(true);
+    // The plan shows changes to send to Intervals.
+    expect(t.dirtyIds).toContain(session.id);
+    expect(onDay().map((w) => w.id)).toEqual(['icu-903']);
+    expect(debriefQueue(t, addDays(day, 1))).toEqual([]);
+
+    // The next apply takes the session off Intervals and leaves the added workout.
+    await useApp.getState().applyTrainingPlan();
+    expect(fake.planEvents().some((e) => e.external_id === `preburner-plan-${session.id}`)).toBe(false);
+    expect(fake.events.some((e) => e.id === 903)).toBe(true);
+    expect(onDay().map((w) => w.id)).toEqual(['icu-903']);
+    // Re-applying doesn't send it back.
+    await useApp.getState().applyTrainingPlan();
+    expect(fake.planEvents().some((e) => e.external_id === `preburner-plan-${session.id}`)).toBe(false);
+
+    // The ride, however different from the session, counts as it.
+    fake.activities.push({ ...fake.activities[1], id: 'club1', start_date_local: `${day}T09:05:00`, moving_time: (session.durationMin * 3 + 60) * 60, icu_training_load: 180, icu_rpe: undefined, feel: undefined } as never);
+    await useApp.getState().sync();
+    const ride = historyRides(useApp.getState().training).find((r) => r.id === 'act-club1')!;
+    expect(ride.plannedId).toBe(session.id);
+    expect(ride.kind).toBe(session.kind);
+    expect(debriefQueue(useApp.getState().training, addDays(day, 1))).toEqual([]);
+
+    // A new plan over the same weeks reuses session ids; the old swap doesn't carry over.
+    await useApp.getState().discardTrainingPlan();
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    expect(useApp.getState().training.plan!.sessions.some((x) => x.id === session.id)).toBe(true);
+    expect(useApp.getState().training.replacedSessions).toBeUndefined();
+    expect(onDay().map((w) => w.id)).toContain(session.id);
   });
 });

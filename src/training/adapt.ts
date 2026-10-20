@@ -139,6 +139,9 @@ export interface AdaptInput {
   recentDowngrades?: DateKey[];
   /** why planned sessions were missed, keyed by session id */
   missedReasons?: Record<string, MissedReason>;
+  /** sessions swapped for another workout: never missed, never caught up,
+   *  and no work moved onto their day */
+  replaced?: Record<string, { date: DateKey }>;
   rides: RideRecord[];
   wellness: WellnessRecord[];
   ftpSet: number;
@@ -187,12 +190,12 @@ export const isLogistics = (r: MissedReason | undefined) => r === undefined || r
  * keeps hard days apart. The move remembers what the day held so a later
  * answer ("I was sick") can undo it.
  */
-export function catchUp(sessions: PlannedSession[], missed: PlannedSession, today: DateKey, scales: Partial<Record<HardKind, number>> = {}): { sessions: PlannedSession[]; adjustment?: Adjustment } {
+export function catchUp(sessions: PlannedSession[], missed: PlannedSession, today: DateKey, scales: Partial<Record<HardKind, number>> = {}, avoid: (d: DateKey) => boolean = () => false): { sessions: PlannedSession[]; adjustment?: Adjustment } {
   // The missed session itself didn't happen, so it doesn't count as a hard day.
   const isHardOn = (d: DateKey) => sessions.some((s) => s.date === d && isQuality(s) && s.id !== missed.id);
   const target = [0, 1, 2]
     .map((o) => addDays(today, o))
-    .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && !sessions.some((s) => s.date === d && (s.kind === 'ftptest' || s.kind === 'openers')));
+    .find((d) => !avoid(d) && !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && !sessions.some((s) => s.date === d && (s.kind === 'ftptest' || s.kind === 'openers')));
   const easy = target && sessions.find((s) => s.date === target && !s.hard);
   if (!easy) {
     // A missed FTP test (often the plan's last day) goes on the next free day,
@@ -291,16 +294,18 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
   }
 
   // 4. Missed sessions. A long gap (illness, travel) triggers a replan.
-  const planned7 = sessions.filter((s) => s.date >= addDays(today, -7) && s.date < today);
+  const isReplaced = (s: PlannedSession) => input.replaced?.[s.id]?.date === s.date;
+  const replacedOn = (d: DateKey) => sessions.some((s) => s.date === d && isReplaced(s));
+  const planned7 = sessions.filter((s) => s.date >= addDays(today, -7) && s.date < today && !isReplaced(s));
   const missed = planned7.filter((s) => !(ridesByDate.get(s.date)?.length));
   const replan = planned7.length >= 3 && missed.length >= Math.max(3, Math.ceil(planned7.length * 0.6));
   const isHardOn = (d: DateKey) => sessions.some((s) => s.date === d && isQuality(s));
   const yesterday = addDays(today, -1);
-  const missedHard = sessions.find((s) => s.date === yesterday && isCatchable(s) && !ridesByDate.get(yesterday)?.length);
+  const missedHard = sessions.find((s) => s.date === yesterday && isCatchable(s) && !isReplaced(s) && !ridesByDate.get(yesterday)?.length);
   // Until the athlete says why, assume life got in the way and catch the work
   // up. An answer is handled where it's given (see debrief.ts).
   if (missedHard && !replan && input.missedReasons?.[missedHard.id] === undefined) {
-    const res = catchUp(sessions, missedHard, today, input.plan.intensityScale);
+    const res = catchUp(sessions, missedHard, today, input.plan.intensityScale, replacedOn);
     sessions = res.sessions;
     if (res.adjustment) adjustments.push(res.adjustment);
   }
@@ -318,7 +323,7 @@ export function adaptDay(input: AdaptInput, cfg: AdaptConfig = DEFAULT_ADAPT): A
       // Try to fit the work back in later this week.
       const later = [1, 2, 3]
         .map((o) => addDays(today, o))
-        .find((d) => !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && sessions.some((x) => x.date === d && x.kind === 'endurance'));
+        .find((d) => !replacedOn(d) && !isHardOn(d) && !isHardOn(addDays(d, -1)) && !isHardOn(addDays(d, 1)) && sessions.some((x) => x.date === d && x.kind === 'endurance'));
       if (later) {
         const easy = sessions.find((x) => x.date === later && x.kind === 'endurance')!;
         sessions = sessions.map((x) => (x === easy ? { ...rebuild(easy, s.kind, Math.max(easy.durationMin, s.durationMin), Math.max(1, s.level - 1), scales[s.kind as HardKind] ?? 1), id: easy.id } : x));

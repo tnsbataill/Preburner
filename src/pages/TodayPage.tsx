@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GlycogenChart } from '../components/GlycogenChart';
 import { Timeline, focusSlot } from '../components/Timeline';
 import { NewRideCard } from '../components/RideReview';
+import { AddedOnIntervalsCard, PlanWorkoutButton } from '../components/PlanWorkout';
 import { DebriefPrompt, NoDataNotice, ReadinessCard } from '../components/TrainingCards';
 import { WeighInCard } from '../components/WeighIn';
 import { bandFor } from '../engine/plan';
@@ -268,9 +269,11 @@ export function TodayPage() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           {isToday && <NewRideCard />}
+          <AddedOnIntervalsCard day={day} />
           {isToday && <NextUp day={day} nowMin={nowMin} />}
           <CompactSummary day={day} />
           <Timeline day={day} nowMin={isToday ? nowMin : undefined} />
+          {day.date >= today && <PlanWorkoutButton key={day.date} date={day.date} />}
         </div>
         <div id="summary" className="scroll-mt-20 space-y-4 lg:sticky lg:top-8 lg:self-start">
           <DaySummary day={day} weightKg={currentWeightKg} />

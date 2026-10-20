@@ -11,7 +11,7 @@ import { readArchive, toRideRecords } from '../training/history/strava';
 import { readZipStream } from '../training/history/zip';
 import type { MissedReason, RideIssue } from '../training/history/types';
 import type { MealSuggestion } from '../coach/meal';
-import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation, trainingWellness } from './training';
+import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, detectAddedEvents, historyRides, reconcilePlanEvents, runAdaptation, trainingWellness } from './training';
 import { readHealthExport } from '../health/appleHealth';
 import { type RideDetails, planChanges, queueReviews, reviewCandidates, snapshotPlan } from '../training/review';
 import { recentBodyFat } from '../health/merge';
@@ -80,6 +80,13 @@ export interface AppState {
   ensureReviews: () => void;
   markReviewed: (rideId: string) => void;
   setRideDetails: (rideId: string, details: RideDetails) => void;
+  /** a session planned in the app (kept locally, not sent to Intervals) */
+  addLocalWorkout: (w: Workout) => void;
+  removeLocalWorkout: (id: string) => void;
+  /** dismiss the "new on Intervals" notice; hide also leaves the event out */
+  acknowledgeAdded: (id: string, hide?: boolean) => void;
+  /** "ride it instead": the added event takes the place of that day's plan session */
+  replaceWithAdded: (id: string) => void;
 }
 
 /** Everything the planner needs, from the store. */
@@ -194,7 +201,11 @@ export const useApp = create<AppState>()(
             settings: { ...s.settings, profile: { ...s.settings.profile, ...stripUndefined(res.profile) } },
             // Intervals resolves %FTP against its own FTP, so the plan's working
             // FTP follows it as soon as it changes, not at the next daily adaptation.
-            ...(res.profile.ftp ? { training: { ...s.training, ftp: res.profile.ftp } } : {}),
+            training: {
+              ...s.training,
+              ...(res.profile.ftp ? { ftp: res.profile.ftp } : {}),
+              addedExternal: detectAddedEvents(s.training, s.workouts, res.workouts, today),
+            },
             connection: { ...s.connection, mode: 'intervals', athleteId: res.athleteId, lastSync: new Date().toISOString(), syncError: undefined, syncLog: res.log },
           }));
           // Longer history for the training model; failure here is non-fatal.
@@ -231,7 +242,7 @@ export const useApp = create<AppState>()(
             ? { ftp: est, reason: `Your recent rides put FTP at about ${est} W (Intervals has ${s.settings.profile.ftp} W)`, date: today }
             : undefined;
         set((st) => ({
-          training: { ...st.training, plan, ftp: plan.request.ftp, ftpSuggestion, appliedAt: undefined, dirtyIds: [], adjustments: [], lastAdapt: undefined, readiness: undefined },
+          training: { ...st.training, plan, ftp: plan.request.ftp, ftpSuggestion, appliedAt: undefined, dirtyIds: [], adjustments: [], lastAdapt: undefined, readiness: undefined, replacedSessions: undefined },
         }));
         get().adaptTraining();
       },
@@ -244,7 +255,7 @@ export const useApp = create<AppState>()(
           const { deleteIds } = reconcilePlanEvents(undefined, workouts, { dirtyIds: [] }, todayKey(settings.profile.timezone), settings.schedule);
           for (const id of deleteIds) await client.deleteEvent(id);
         }
-        set((s) => ({ training: { ...s.training, plan: undefined, appliedAt: undefined, dirtyIds: [], adjustments: [], readiness: undefined, lastAdapt: undefined } }));
+        set((s) => ({ training: { ...s.training, plan: undefined, appliedAt: undefined, dirtyIds: [], adjustments: [], readiness: undefined, lastAdapt: undefined, replacedSessions: undefined } }));
         if (connection.mode === 'intervals') await get().sync();
       },
 
@@ -335,6 +346,36 @@ export const useApp = create<AppState>()(
 
       setRideDetails: (rideId, details) =>
         set((s) => ({ training: { ...s.training, rideDetails: { ...s.training.rideDetails, [rideId]: { ...s.training.rideDetails?.[rideId], ...details } } } })),
+
+      addLocalWorkout: (w) => set((s) => ({ localWorkouts: [...s.localWorkouts.filter((x) => x.id !== w.id), w] })),
+
+      removeLocalWorkout: (id) =>
+        set((s) => {
+          const timeOverrides = { ...s.timeOverrides };
+          delete timeOverrides[id];
+          return { localWorkouts: s.localWorkouts.filter((w) => w.id !== id), timeOverrides };
+        }),
+
+      acknowledgeAdded: (id, hide) =>
+        set((s) => {
+          const a = s.training.addedExternal?.[id];
+          return {
+            ...(a ? { training: { ...s.training, addedExternal: { ...s.training.addedExternal, [id]: { ...a, seen: true } } } } : {}),
+            ...(hide ? { hiddenWorkoutIds: [...new Set([...s.hiddenWorkoutIds, id])] } : {}),
+          };
+        }),
+
+      replaceWithAdded: (id) =>
+        set((s) => {
+          const a = s.training.addedExternal?.[id];
+          const sessions = s.training.plan?.sessions.filter((x) => x.date === a?.date) ?? [];
+          if (!a || !sessions.length) return {};
+          const replaced = { ...s.training.replacedSessions };
+          for (const x of sessions) replaced[x.id] = { by: id, date: a.date };
+          // Already on Intervals: the next sync of the plan takes it off.
+          const dirtyIds = s.training.appliedAt ? [...new Set([...s.training.dirtyIds, ...sessions.map((x) => x.id)])] : s.training.dirtyIds;
+          return { training: { ...s.training, replacedSessions: replaced, dirtyIds, addedExternal: { ...s.training.addedExternal, [id]: { ...a, seen: true } } } };
+        }),
 
       answerMissed: (sessionId, reason) =>
         set((s) => ({ training: { ...s.training, ...answerMissed(s.training, sessionId, reason, todayKey(s.settings.profile.timezone)) } })),

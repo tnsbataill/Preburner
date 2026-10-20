@@ -4,6 +4,7 @@ import { EFFICIENCY_PRESETS, NEAT_PRESETS } from '../engine/defaults';
 import { formatClock, parseClock } from '../engine/time';
 import type { Weekday } from '../engine/types';
 import { AppleHealthImport } from '../components/AppleHealthImport';
+import { IntervalsKeyHelp } from '../components/IntervalsKeyHelp';
 import { type Theme, useApp } from '../state/store';
 import { LB_PER_KG, fmtRate } from '../ui/format';
 import { Button, Card, ConfirmButton, cx, Field, inputCls, NumberInput, Segmented, Slider, Toggle } from '../ui/primitives';
@@ -127,6 +128,7 @@ export function SettingsPage() {
             ) : (
               <span className="text-xs text-muted">Currently showing demo data.</span>
             )}
+            {(!s.connection.intervalsKey || s.connection.syncError) && <IntervalsKeyHelp onKey={setKeyDraft} />}
           </div>
           {s.connection.syncError && <p className="rounded-xl bg-bad/10 p-3 text-sm text-bad">{s.connection.syncError}</p>}
           {s.connection.mode === 'intervals' && s.connection.lastSync && !s.connection.syncError && (

@@ -44,6 +44,8 @@ export interface Workout {
   description?: string;
   /** Intervals external_id, for events Preburner created */
   externalId?: string;
+  /** Intervals event tags (TrainerRoad tags its events 'trainerroad') */
+  tags?: string[];
 }
 
 export interface WeightEntry {
