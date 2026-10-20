@@ -73,7 +73,7 @@ export const CARB_BANDS: Record<DayLoadClass, [number, number]> = {
  * Daily carbs: baseline + what the sessions actually burn + a top-up when
  * tomorrow is demanding ("fuel for the work required"). High-load days are
  * held to the guideline band floor; easy days can sit lower, which is where
- * a cut finds its room. Carb-loading days jump to 8–10 g/kg.
+ * a cut finds its room. Carb-loading days jump to 10 g/kg.
  */
 export function dailyCarbGrams(opts: {
   workouts: Workout[];
@@ -95,7 +95,8 @@ export function dailyCarbGrams(opts: {
   const floor = (strictFloor ? lo : Math.min(lo, prefs.baseCarbGPerKg)) * weightKg;
   const ceiling = (hi + topUpPerKg) * weightKg;
   let grams = Math.min(ceiling, Math.max(floor, raw));
-  if (opts.carbLoad) grams = Math.max(grams, 9 * weightKg);
+  // 10 g/kg for a day fills muscle glycogen (Bussau et al. 2002).
+  if (opts.carbLoad) grams = Math.max(grams, 10 * weightKg);
   // When carb-loading the extra is spread across every meal, not piled into dinner.
   return { grams, sessionCarbG, topUpG: opts.carbLoad ? 0 : topUpG };
 }

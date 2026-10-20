@@ -6,9 +6,11 @@ import { planDaySlots, resolveWorkoutTimes } from './scheduler';
 import { addDays, dateRange, diffDays, weekStartOf, weekdayOf } from './time';
 import type { DateKey, DayLoadClass, DayPlan, Plan, PlanFlag, Settings, WeekSummary, Workout } from './types';
 
-// Energy availability floors (kcal per kg fat-free mass). Below these the risk
-// of low energy availability / RED-S rises; the male threshold appears lower
-// (Loucks 2011; Koehler 2016; IOC RED-S consensus 2023).
+// Energy availability floors (kcal per kg fat-free mass). 30 is the classic
+// female threshold (Loucks 2011). No male threshold is established: Koehler
+// 2016 saw hormonal effects at 15 vs 40, and later reviews suggest 9–25, so 25
+// is the cautious end. The IOC REDs consensus (2023) treats low EA as a
+// spectrum, so this is a guard rail, not a cliff edge.
 const EA_FLOOR = { M: 25, F: 30 } as const;
 
 export interface BuildPlanInput {
@@ -135,7 +137,7 @@ export function buildPlan(input: BuildPlanInput): Plan {
     const tomorrowResolved = resolveWorkoutTimes(addDays(b.date, 1), tomorrow, settings.schedule);
     const tomorrowHard = tomorrow.some((w) => isHard(w.intensity) || isRaceEvent(w)) || ['high', 'very-high'].includes(b.nextLoadClass);
     if (b.carbLoad) {
-      flags.push({ level: 'info', code: 'carb-load', message: 'Race tomorrow — carb-load today (~9 g/kg), low fibre and fat. Expect +1 kg on the scale from glycogen and water; that is fuel, not fat.' });
+      flags.push({ level: 'info', code: 'carb-load', message: 'Race tomorrow — carb-load today (~10 g/kg), low fibre and fat. Expect +1 kg on the scale from glycogen and water; that is fuel, not fat.' });
     }
     const raceToday = resolved.find((w) => isRaceEvent(w));
     if (raceToday && raceToday.resolvedStartMin - settings.schedule.wakeMin < 180) {

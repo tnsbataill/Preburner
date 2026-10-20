@@ -39,7 +39,7 @@ Goal: Preburner generates the full training plan (replacing TrainerRoad's), tune
    - Weekly target TSS → day placement (hard days not back-to-back, long ride on the biggest weekend slot, easy after hard, rest on zero-availability days) → session selection with progression.
 6. **`optimize.ts`**: one-shot optimizer.
    - Searches the genome: discrete grid plus coordinate/random refinement.
-   - Each candidate runs through the fitted ensemble. Objective for `ftp`: expected performance on the final test day minus risk penalties (P(fatigue overload), monotony/strain, ramp > limit, availability violations).
+   - Each candidate runs through the fitted ensemble. Objective for `ftp`: expected performance on the final test day, minus 0.5 × the ensemble SD, minus a penalty for TSB below −30. Ramp, availability and intensity limits are enforced by the generator rather than penalised. (A monotony/strain penalty, after Foster 1998, was planned but isn't implemented.)
    - Objectives: `ftp` (default), `event` (performance on date + TSB window), `ctl` (fitness for the hours).
 7. **`adapt.ts`**: closed loop, run on every sync.
    - Readiness from HRV SWC, RHR, sleep and TSB.

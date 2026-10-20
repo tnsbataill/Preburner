@@ -19,7 +19,7 @@ It's a PWA hosted on GitHub Pages. Everything stays in your browser; keys are on
 | --- | --- |
 | Resting energy | Mifflin-St Jeor, or Katch-McArdle when body fat is set; × daily-life (NEAT) factor |
 | Session energy | kJ ÷ gross efficiency, minus the resting energy already counted. kJ sources, in priority order: planned → description ("kJ(Cal) 811") → workout steps → IF → load |
-| Daily carbs | Baseline + carbs actually burned (intensity-based CHO fraction) + a top-up when tomorrow is hard; held to the IOC/ACSM g/kg band on big days. Day before a ≥2.5 h race: ~9 g/kg carb-load |
+| Daily carbs | Baseline + carbs actually burned (intensity-based CHO fraction) + a top-up when tomorrow is hard; held to the IOC/ACSM g/kg band on big days. Day before a ≥2.5 h race: ~10 g/kg carb-load |
 | In-ride fuel | g/h from duration × intensity, capped at your trained-gut max; glucose:fructose split above 60 g/h; fluid and sodium from sweat rate |
 | Meal timing | Main meals move out of the 2 h before a session; pre-ride meal 2–5 h out; early starts get a light breakfast or quick snack; races get a ~3 h-out breakfast; recovery within 20–45 min; two-a-days handled; long gaps bridged |
 | Weight goal | Target weight and date → weekly rate, capped at 1 % body mass/week. The deficit goes on easy days only, never cuts training carbs, and stops at the energy-availability floor (25 kcal/kg FFM for men, 30 for women) |
@@ -57,7 +57,7 @@ The **Plan** tab builds the training itself. You pick a goal (raise FTP by defau
   - **Send to Intervals** writes them as Preburner-tagged workouts with structure, and re-sending is idempotent.
   - Clear your TrainerRoad plan for those weeks so TR doesn't keep syncing its own sessions.
 
-Design and evidence are in [docs/training-plan-design.md](docs/training-plan-design.md). Simulation results, including what *didn't* help, are in [docs/training-plan-results.md](docs/training-plan-results.md).
+Design and evidence are in [docs/training-plan-design.md](docs/training-plan-design.md), and every fuelling and training constant is mapped to its source in [docs/science-references.md](docs/science-references.md). Simulation results, including what *didn't* help, are in [docs/training-plan-results.md](docs/training-plan-results.md).
 
 ## Intervals.icu
 

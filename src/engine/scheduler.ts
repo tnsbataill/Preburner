@@ -306,11 +306,22 @@ function distributeMacros(drafts: Draft[], input: DaySlotInput): MealSlot[] {
   };
   const totalPW = drafts.reduce((s, d) => s + proteinWeight(d), 0) || 1;
   const totalFW = drafts.reduce((s, d) => s + fatWeight(d), 0) || 1;
+  // Pre-sleep protein needs ~40 g to lift overnight synthesis (Res et al. 2012),
+  // capped at 30% of the day's protein; the other slots give up the difference.
+  const proteinShare = new Map(drafts.map((d) => [d, (macros.proteinG * proteinWeight(d)) / totalPW]));
+  for (const d of drafts) {
+    if (d.kind !== 'pre-sleep') continue;
+    const share = proteinShare.get(d)!;
+    const floor = Math.min(40, 0.3 * macros.proteinG);
+    if (share >= floor) continue;
+    const scale = (macros.proteinG - floor) / (macros.proteinG - share);
+    for (const [x, g] of proteinShare) proteinShare.set(x, x === d ? floor : g * scale);
+  }
 
   return drafts.map((d, i) => {
     let carbG = (carbFixed.get(d) ?? 0) + (totalCarbW > 0 ? (remaining * carbWeight(d)) / totalCarbW : 0);
     if (d === lastMain) carbG += topUp;
-    const proteinG = (macros.proteinG * proteinWeight(d)) / totalPW;
+    const proteinG = proteinShare.get(d)!;
     const fatG = (macros.fatG * fatWeight(d)) / totalFW;
     const m: Macros = { carbG: Math.round(carbG), proteinG: Math.round(proteinG), fatG: Math.round(fatG) };
     const slot: MealSlot = {

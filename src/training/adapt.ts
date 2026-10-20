@@ -7,8 +7,10 @@ import type { HardKind, PlannedSession, SessionKind, TrainingPlan } from './type
 // Closed-loop adjustments, run every day against what actually happened.
 // Readiness follows the HRV-guided training literature (Vesterinen, Javaloyes,
 // Plews): compare the 7-day rolling mean of lnRMSSD to the athlete's 60-day
-// normal range (mean ± 0.5 SD, the "smallest worthwhile change"). Hard work
-// goes ahead inside the range and is swapped for easy riding below it.
+// normal range. The trials used mean ± 0.5 SD (Vesterinen 2016); we default to
+// ± 1.0 SD because 0.5 cost FTP gain in simulation (docs/training-plan-results.md),
+// and only flag the low side. Hard work goes ahead inside the range and is
+// swapped for easy riding below it.
 
 export type ReadinessLevel = 'green' | 'amber' | 'red';
 
