@@ -247,3 +247,20 @@ test('"Ride it instead" swaps a plan session for a workout added on Intervals, a
   await expect(title(sessionTitle)).toHaveCount(0);
   await expect(title(workoutTitle).first()).toBeVisible();
 });
+
+test('the week view shows power profiles on structured workouts', async ({ page }) => {
+  await onboardWithDemo(page);
+  await page.goto('/#/week');
+  // Step through weeks until one has a structured session.
+  const next = page.getByRole('button', { name: 'Next week' });
+  for (let i = 0; i < 4 && (await page.getByTestId('workout-profile').count()) === 0; i += 1) {
+    if (await next.isDisabled()) break;
+    await next.click();
+  }
+  const profile = page.getByTestId('workout-profile').first();
+  await expect(profile).toBeVisible();
+  expect(await profile.locator('polygon').count()).toBeGreaterThan(0);
+  const box = await profile.boundingBox();
+  expect(box!.width).toBeGreaterThan(40);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

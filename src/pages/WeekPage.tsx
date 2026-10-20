@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { WeightChart } from '../components/WeightChart';
+import { WorkoutProfile } from '../components/WorkoutProfile';
 import { observedRate } from '../engine/goals';
 import { addDays, diffDays, formatDate, formatDuration, weekStartOf, weekdayShort } from '../engine/time';
 import type { DayPlan } from '../engine/types';
@@ -43,6 +44,7 @@ function DayColumn({ day, today, maxKcal }: { day: DayPlan; today: string; maxKc
               <div className="num text-[10px] text-muted">
                 {formatDuration(w.durationMin)} · {w.load} load
               </div>
+              <WorkoutProfile steps={w.steps} ftpLine={false} className="mt-1.5 h-8 w-full rounded-sm lg:h-6" />
             </div>
           ))
         )}
