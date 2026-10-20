@@ -110,16 +110,20 @@ input[type='range'] {
   padding-top: calc(var(--pad-top, 0px) + env(safe-area-inset-top));
 }
 
-/* iOS draws date inputs with its own padding and centred text, so a date
-   field comes out taller than the select beside it: drop the native look and
-   left-align the value. */
-input[type='date'] {
+/* iOS draws date and time inputs with its own padding and centred text, so
+   a date field comes out taller than the select beside it, and a time field
+   keeps a native minimum width that pushes past a half-width grid column:
+   drop the native look, let the field shrink, and left-align the value. */
+input[type='date'],
+input[type='time'] {
   -webkit-appearance: none;
   appearance: none;
+  min-width: 0;
   /* an empty unstyled date input collapses on iOS */
   min-height: 2.5rem;
 }
-input[type='date']::-webkit-date-and-time-value {
+input[type='date']::-webkit-date-and-time-value,
+input[type='time']::-webkit-date-and-time-value {
   text-align: left;
   margin: 0;
 }
