@@ -146,3 +146,22 @@ test('structured workouts show a power-profile preview', async ({ page }) => {
   expect(await profile.locator('polygon').count()).toBeGreaterThan(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+test('a new ride is reviewed: card on Today, review screen, answers saved, then it goes away', async ({ page }) => {
+  await onboardWithDemo(page);
+  const card = page.getByTestId('new-ride-card');
+  await expect(card).toBeVisible();
+  await card.getByRole('button').first().click();
+  const review = page.getByTestId('ride-review');
+  await expect(review).toBeVisible();
+  await expect(page.getByTestId('review-changes')).toContainText(/Fitness \(CTL\) [+−]\d/);
+  await expect(page.getByTestId('review-changes')).toContainText('No training plan yet');
+  const rpe6 = review.getByRole('group', { name: /Effort for ride/ }).getByRole('button', { name: '6', exact: true });
+  await rpe6.click();
+  await expect(rpe6).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await expect(page.getByTestId('new-ride-card')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('new-ride-card')).toHaveCount(0);
+});

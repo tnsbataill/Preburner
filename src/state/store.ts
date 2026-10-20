@@ -13,6 +13,7 @@ import type { MissedReason, RideIssue } from '../training/history/types';
 import type { MealSuggestion } from '../coach/meal';
 import { INITIAL_TRAINING, type Feedback, type TrainingState, answerMissed, answerRideIssue, applyFeedback, demoTrainingHistory, historyRides, reconcilePlanEvents, runAdaptation, trainingWellness } from './training';
 import { readHealthExport } from '../health/appleHealth';
+import { type RideDetails, queueReviews, reviewCandidates, snapshotPlan } from '../training/review';
 import { recentBodyFat } from '../health/merge';
 import { clearCoachHistory } from '../coach/history';
 import type { CoachMessage, Proposal } from '../coach/types';
@@ -75,6 +76,10 @@ export interface AppState {
   adaptTraining: () => void;
   answerMissed: (sessionId: string, reason: MissedReason) => void;
   answerRideIssue: (rideId: string, issue: RideIssue, sessionId?: string) => void;
+  /** queue rides already in the app that haven't been reviewed (e.g. on first open) */
+  ensureReviews: () => void;
+  markReviewed: (rideId: string) => void;
+  setRideDetails: (rideId: string, details: RideDetails) => void;
 }
 
 /** Everything the planner needs, from the store. */
@@ -169,6 +174,12 @@ export const useApp = create<AppState>()(
         const { connection, settings } = get();
         if (!connection.intervalsKey) return;
         set({ syncing: true });
+        // What the app knew before this sync: rides that arrive now are new,
+        // and the plan as it stands is what their changes are measured against.
+        const today = todayKey(settings.profile.timezone);
+        const before = get().training;
+        const known = new Set(reviewCandidates(before.intervalsRides, before.stravaRides, today).map((r) => r.id));
+        const baseline = snapshotPlan(before.plan?.sessions, today, before.ftp ?? settings.profile.ftp, before.readiness?.level);
         try {
           const client = new IntervalsClient(connection.intervalsKey, connection.athleteId || '0');
           const res = await syncIntervals(client, todayKey(settings.profile.timezone), settings.profile.ftp);
@@ -194,6 +205,7 @@ export const useApp = create<AppState>()(
             console.warn('Preburner: training history sync failed', err);
           }
           get().adaptTraining();
+          set((s) => ({ training: { ...s.training, reviews: queueReviews(s.training.reviews ?? {}, reviewCandidates(s.training.intervalsRides, s.training.stravaRides, today), known, baseline) } }));
         } catch (err) {
           set((s) => ({ syncing: false, connection: { ...s.connection, syncError: err instanceof Error ? err.message : String(err) } }));
         }
@@ -296,11 +308,30 @@ export const useApp = create<AppState>()(
         });
         const { connection } = get();
         // Keep Intervals the source of truth for RPE/feel when the ride lives there.
-        if (connection.mode === 'intervals' && connection.intervalsKey && rideId.startsWith('act-')) {
+        // A Strava-only ride can't be written to (Intervals answers 422), so it stays in-app.
+        const stravaOnly = get().training.intervalsRides.some((r) => r.id === rideId && r.noData);
+        if (connection.mode === 'intervals' && connection.intervalsKey && rideId.startsWith('act-') && !stravaOnly) {
           const client = new IntervalsClient(connection.intervalsKey, connection.athleteId || '0');
           await client.updateActivity(rideId.slice(4), { ...(fb.rpe ? { icu_rpe: fb.rpe } : {}), ...(fb.feel ? { feel: fb.feel } : {}) }).catch((err) => console.warn('Preburner: could not save feedback to Intervals', err));
         }
       },
+
+      ensureReviews: () =>
+        set((s) => {
+          const today = todayKey(s.settings.profile.timezone);
+          const t = s.training;
+          const reviews = queueReviews(t.reviews ?? {}, reviewCandidates(t.intervalsRides, t.stravaRides, today), new Set(), snapshotPlan(t.plan?.sessions, today, t.ftp ?? s.settings.profile.ftp, t.readiness?.level));
+          return reviews === t.reviews ? {} : { training: { ...t, reviews } };
+        }),
+
+      markReviewed: (rideId) =>
+        set((s) => {
+          const r = s.training.reviews?.[rideId];
+          return r ? { training: { ...s.training, reviews: { ...s.training.reviews, [rideId]: { ...r, doneAt: new Date().toISOString() } } } } : {};
+        }),
+
+      setRideDetails: (rideId, details) =>
+        set((s) => ({ training: { ...s.training, rideDetails: { ...s.training.rideDetails, [rideId]: { ...s.training.rideDetails?.[rideId], ...details } } } })),
 
       answerMissed: (sessionId, reason) =>
         set((s) => ({ training: { ...s.training, ...answerMissed(s.training, sessionId, reason, todayKey(s.settings.profile.timezone)) } })),

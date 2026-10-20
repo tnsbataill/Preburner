@@ -2,7 +2,8 @@ import { AlertTriangle, ArrowRight, Info, ShieldCheck, Siren } from 'lucide-reac
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GlycogenChart } from '../components/GlycogenChart';
 import { Timeline, focusSlot } from '../components/Timeline';
-import { DebriefPrompt, FeedbackPrompt, NoDataNotice, ReadinessCard } from '../components/TrainingCards';
+import { NewRideCard } from '../components/RideReview';
+import { DebriefPrompt, NoDataNotice, ReadinessCard } from '../components/TrainingCards';
 import { WeighInCard } from '../components/WeighIn';
 import { bandFor } from '../engine/plan';
 import { addDays, diffDays, formatClock, formatDate, formatDuration, nowMinutes, weekdayShort } from '../engine/time';
@@ -266,6 +267,7 @@ export function TodayPage() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
+          {isToday && <NewRideCard />}
           {isToday && <NextUp day={day} nowMin={nowMin} />}
           <CompactSummary day={day} />
           <Timeline day={day} nowMin={isToday ? nowMin : undefined} />
@@ -280,7 +282,6 @@ export function TodayPage() {
           {isToday && <ReadinessCard />}
           {isToday && <NoDataNotice />}
           {isToday && <DebriefPrompt />}
-          {isToday && <FeedbackPrompt compact />}
           {isToday && <WeighInCard />}
         </div>
       </div>

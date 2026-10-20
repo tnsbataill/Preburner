@@ -1,5 +1,6 @@
 import { Activity, CalendarDays, Dumbbell, Flame, MessageSquareText, RefreshCw, Settings as SettingsIcon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ReviewPage } from './components/RideReview';
 import { CoachPage } from './pages/CoachPage';
 import { FitnessPage } from './pages/FitnessPage';
 import { PlanPage } from './pages/PlanPage';
@@ -10,7 +11,7 @@ import { WeekPage } from './pages/WeekPage';
 import { useApp } from './state/store';
 import { cx } from './ui/primitives';
 
-export type Route = 'today' | 'week' | 'plan' | 'fitness' | 'coach' | 'settings';
+export type Route = 'today' | 'week' | 'plan' | 'fitness' | 'coach' | 'settings' | 'review';
 
 const NAV: Array<{ id: Route; label: string; icon: typeof Sun }> = [
   { id: 'today', label: 'Today', icon: Sun },
@@ -23,6 +24,7 @@ const NAV: Array<{ id: Route; label: string; icon: typeof Sun }> = [
 
 function readRoute(): Route {
   const h = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+  if (h === 'review') return 'review';
   return (NAV.find((n) => n.id === h)?.id ?? 'today') as Route;
 }
 
@@ -87,9 +89,17 @@ export default function App() {
 
   // Adjust the training plan once a day from what actually happened.
   const adaptTraining = useApp((s) => s.adaptTraining);
+  const ensureReviews = useApp((s) => s.ensureReviews);
   useEffect(() => {
     adaptTraining();
   }, [adaptTraining]);
+  // New rides go into the review queue. A sync queues them itself against the
+  // plan as it stood before; this catches rides that appear any other way
+  // (first open, demo data, an import).
+  const rides = useApp((s) => s.training.intervalsRides);
+  useEffect(() => {
+    ensureReviews();
+  }, [rides, ensureReviews]);
 
   // Refresh from Intervals on open if the cache is older than 15 minutes.
   useEffect(() => {
@@ -123,6 +133,7 @@ export default function App() {
     fitness: <FitnessPage />,
     coach: <CoachPage />,
     settings: <SettingsPage />,
+    review: <ReviewPage />,
   }[route];
 
   return (

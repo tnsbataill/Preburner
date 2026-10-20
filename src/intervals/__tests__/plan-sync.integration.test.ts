@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays, todayKey } from '../../engine/time';
 import { useApp } from '../../state/store';
+import { historyRides } from '../../state/training';
 import type { IcuEvent } from '../client';
 import * as rec from './fixtures/recorded';
 
@@ -43,6 +44,7 @@ class FakeIntervals {
     };
   });
   // A ride that reached Intervals via Strava: the API returns only a stub.
+  extraStubs: Array<Record<string, unknown>> = [];
   stravaStub = { id: 'strava1', start_date_local: `${d(-2)}T07:00:00`, source: 'STRAVA', _note: 'STRAVA activities are not available via the API' };
   fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -66,7 +68,7 @@ class FakeIntervals {
       this.events = this.events.filter((e) => e.id !== Number(del[1]));
       return new Response(null, { status: 204 });
     }
-    if (p.endsWith('/activities')) return json([...this.activities, this.stravaStub]);
+    if (p.endsWith('/activities')) return json([...this.activities, this.stravaStub, ...this.extraStubs]);
     const act = /\/activity\/([^/]+)$/.exec(p);
     if (act && method === 'PUT') {
       this.activityPuts.push({ id: act[1], body: JSON.parse(String(init!.body)) });
@@ -148,7 +150,7 @@ describe('training plan <-> Intervals.icu', () => {
   });
 
   it('RPE and feel answered in the app are written back to the activity', async () => {
-    const ride = useApp.getState().training.intervalsRides.at(-1)!;
+    const ride = useApp.getState().training.intervalsRides.filter((r) => !r.noData).at(-1)!;
     await useApp.getState().setFeedback(ride.id, { rpe: 7, feel: 2 });
     expect(fake.activityPuts.at(-1)).toEqual({ id: ride.id.slice(4), body: { icu_rpe: 7, feel: 2 } });
   });
@@ -195,5 +197,31 @@ describe('training plan <-> Intervals.icu', () => {
     expect(s.weights.find((w) => w.date === today)).toMatchObject({ kg: 76.4, source: 'intervals' });
     // The demo's made-up weigh-ins never survive into a connected app.
     expect(s.weights.some((w) => w.source === 'demo' || w.kg === 99)).toBe(false);
+  });
+
+  it('new rides land in a review queue with the plan as it stood; a Strava-only one can be filled in', async () => {
+    useApp.getState().generateTrainingPlan({ objective: 'ftp', weeks: 6, start: d(1), optimize: false });
+    const upcoming = useApp.getState().training.plan!.sessions.filter((x) => x.date >= today).length;
+    // Two rides arrive in one sync: one with data, one that reached Intervals via Strava.
+    fake.activities.push({ ...fake.activities[1], id: 'new1', start_date_local: `${today}T07:00:00` });
+    fake.extraStubs = [{ id: 'strava2', start_date_local: `${today}T12:00:00`, source: 'STRAVA', _note: 'STRAVA activities are not available via the API' }];
+    await useApp.getState().sync();
+    const reviews = useApp.getState().training.reviews!;
+    expect(reviews['act-new1']).toMatchObject({ date: today, batch: ['act-new1', 'act-strava2'] });
+    expect(reviews['act-strava2'].baseline.sessions).toHaveLength(upcoming);
+    // Rides already known before the sync aren't queued again on the next one.
+    await useApp.getState().sync();
+    expect(Object.keys(useApp.getState().training.reviews!).filter((k) => k.startsWith('act-new1') || k.startsWith('act-strava2'))).toHaveLength(2);
+
+    // The Strava-only ride: 60 min at effort 6 becomes an estimated ride; its
+    // effort is not written to Intervals (it would be refused).
+    const puts = fake.activityPuts.length;
+    useApp.getState().setRideDetails('act-strava2', { durationMin: 60 });
+    await useApp.getState().setFeedback('act-strava2', { rpe: 6 });
+    expect(fake.activityPuts.length).toBe(puts);
+    const ride = historyRides(useApp.getState().training).find((r) => r.id === 'act-strava2')!;
+    expect(ride).toMatchObject({ durationMin: 60, estimated: true, tss: 64 });
+    useApp.getState().markReviewed('act-strava2');
+    expect(useApp.getState().training.reviews!['act-strava2'].doneAt).toBeDefined();
   });
 });

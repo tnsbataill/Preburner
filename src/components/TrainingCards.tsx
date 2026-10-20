@@ -4,7 +4,7 @@ import { addDays, formatDate, formatDuration } from '../engine/time';
 import { useApp } from '../state/store';
 import { debriefQueue, historyRides, recentNoDataRides } from '../state/training';
 import { ISSUE_LABEL, MISSED_LABEL } from '../training/debrief';
-import type { MissedReason, RideIssue } from '../training/history/types';
+import type { MissedReason, RideIssue, RideRecord } from '../training/history/types';
 import { useToday } from '../state/usePlan';
 import type { Adjustment } from '../training/adapt';
 import { Card, Chip, SectionTitle, cx } from '../ui/primitives';
@@ -83,7 +83,7 @@ export function AdjustmentRow({ a }: { a: Adjustment }) {
   );
 }
 
-const KIND_LABEL: Record<string, string> = {
+export const KIND_LABEL: Record<string, string> = {
   recovery: 'Recovery spin',
   endurance: 'Endurance',
   long: 'Long ride',
@@ -111,8 +111,6 @@ const FEEL = [
 /** "How did it feel?" for the last few days' rides that have no RPE yet. */
 export function FeedbackPrompt({ compact }: { compact?: boolean }) {
   const training = useApp((s) => s.training);
-  const setFeedback = useApp((s) => s.setFeedback);
-  const adaptTraining = useApp((s) => s.adaptTraining);
   const today = useToday();
   const pending = useMemo(
     () =>
@@ -131,57 +129,67 @@ export function FeedbackPrompt({ compact }: { compact?: boolean }) {
         </span>
       </SectionTitle>
       <div className="space-y-5">
-        {pending.map((r) => {
-          const fb = training.feedback[r.id] ?? {};
-          const rpe = fb.rpe ?? (r.rpe !== undefined ? Math.round(r.rpe) : undefined);
-          const feel = fb.feel ?? r.feel;
-          return (
-            <div key={r.id}>
-              <div className="flex items-center gap-2 text-sm">
-                <Activity size={14} className="text-muted" />
-                <span className="font-medium">{r.kind ? KIND_LABEL[r.kind] ?? r.kind : 'Ride'}</span>
-                <span className="text-muted">
-                  {formatDate(r.date, { weekday: true })} · {r.assumed ? 'no data, assumed as planned' : formatDuration(r.durationMin)}
-                </span>
-              </div>
-              <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">Effort (RPE)</div>
-              <div className="mt-1 grid grid-cols-10 gap-1" role="group" aria-label={`Effort for ride on ${r.date}`}>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-                  <button
-                    key={v}
-                    aria-pressed={rpe === v}
-                    title={RPE_HINT[v]}
-                    onClick={() => void setFeedback(r.id, { rpe: v }).then(adaptTraining)}
-                    className={cx('num rounded-lg border py-1.5 text-sm font-semibold transition', rpe === v ? 'border-ember bg-ember/15 text-ember' : 'border-line hover:bg-raised')}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-1 flex justify-between text-[10px] text-faint">
-                <span>easy</span>
-                <span>max</span>
-              </div>
-              {r.plannedId && r.kind && HARD_KINDS.has(r.kind) && <OffPlan rideId={r.id} sessionId={r.plannedId} answered={training.rideIssues?.[r.id]?.issue} />}
-              <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">How you felt</div>
-              <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={`Feel for ride on ${r.date}`}>
-                {FEEL.map((f) => (
-                  <button
-                    key={f.v}
-                    aria-pressed={feel === f.v}
-                    onClick={() => void setFeedback(r.id, { feel: f.v }).then(adaptTraining)}
-                    className={cx('rounded-full border px-3 py-1 text-xs font-medium transition', feel === f.v ? 'border-ember bg-ember/15 text-ember' : 'border-line hover:bg-raised')}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {pending.map((r) => (
+          <RideFeedback key={r.id} ride={r} />
+        ))}
       </div>
       {!compact && <p className="mt-4 text-xs text-muted">Sessions that feel easier than usual move your progression up; harder ones hold it or step back. Feeling poor two rides running eases the next hard day.</p>}
     </Card>
+  );
+}
+
+/** Effort, feel and "didn't go to plan?" for one ride. */
+export function RideFeedback({ ride: r, showTitle = true }: { ride: RideRecord; showTitle?: boolean }) {
+  const training = useApp((s) => s.training);
+  const setFeedback = useApp((s) => s.setFeedback);
+  const adaptTraining = useApp((s) => s.adaptTraining);
+  const fb = training.feedback[r.id] ?? {};
+  const rpe = fb.rpe ?? (r.rpe !== undefined ? Math.round(r.rpe) : undefined);
+  const feel = fb.feel ?? r.feel;
+  return (
+    <div>
+      {showTitle && (
+        <div className="flex items-center gap-2 text-sm">
+          <Activity size={14} className="text-muted" />
+          <span className="font-medium">{r.kind ? KIND_LABEL[r.kind] ?? r.kind : 'Ride'}</span>
+          <span className="text-muted">
+            {formatDate(r.date, { weekday: true })} · {r.assumed ? 'no data, assumed as planned' : formatDuration(r.durationMin)}
+          </span>
+        </div>
+      )}
+      <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">Effort (RPE)</div>
+      <div className="mt-1 grid grid-cols-10 gap-1" role="group" aria-label={`Effort for ride on ${r.date}`}>
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+          <button
+            key={v}
+            aria-pressed={rpe === v}
+            title={RPE_HINT[v]}
+            onClick={() => void setFeedback(r.id, { rpe: v }).then(adaptTraining)}
+            className={cx('num rounded-lg border py-1.5 text-sm font-semibold transition', rpe === v ? 'border-ember bg-ember/15 text-ember' : 'border-line hover:bg-raised')}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-faint">
+        <span>easy</span>
+        <span>max</span>
+      </div>
+      {r.plannedId && r.kind && HARD_KINDS.has(r.kind) && <OffPlan rideId={r.id} sessionId={r.plannedId} answered={training.rideIssues?.[r.id]?.issue} />}
+      <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-muted">How you felt</div>
+      <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={`Feel for ride on ${r.date}`}>
+        {FEEL.map((f) => (
+          <button
+            key={f.v}
+            aria-pressed={feel === f.v}
+            onClick={() => void setFeedback(r.id, { feel: f.v }).then(adaptTraining)}
+            className={cx('rounded-full border px-3 py-1 text-xs font-medium transition', feel === f.v ? 'border-ember bg-ember/15 text-ember' : 'border-line hover:bg-raised')}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

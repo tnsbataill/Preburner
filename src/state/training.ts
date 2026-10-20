@@ -1,3 +1,4 @@
+import { type RideDetails, type RideReview, estimateLoad } from '../training/review';
 import type { AppleHealthData } from '../health/appleHealth';
 import { withHealthRecords } from '../health/merge';
 import { addDays, diffDays, weekdayOf } from '../engine/time';
@@ -55,6 +56,10 @@ export interface TrainingState {
   replaceExternal: boolean;
   /** last Apple Health import (kept apart so an Intervals sync never wipes it) */
   appleHealth?: AppleHealthData;
+  /** new rides to review, with the plan as it stood when each arrived */
+  reviews?: Record<string, RideReview>;
+  /** duration etc. the athlete gave for rides Intervals only saw via Strava */
+  rideDetails?: Record<string, RideDetails>;
 }
 
 export const INITIAL_TRAINING: TrainingState = {
@@ -70,14 +75,23 @@ export const INITIAL_TRAINING: TrainingState = {
   replaceExternal: true,
 };
 
-/** All rides from every source, de-duplicated, with in-app feedback applied. */
 /** Wellness for readiness: Intervals' records with Apple Health merged in. */
 export function trainingWellness(t: TrainingState): WellnessRecord[] {
   return withHealthRecords(t.wellness, t.appleHealth);
 }
 
+/** All rides from every source, de-duplicated, with in-app feedback applied. */
 export function historyRides(t: TrainingState): RideRecord[] {
-  const merged = mergeRides(t.intervalsRides, t.stravaRides);
+  // A Strava-only ride the athlete filled in becomes a ride with an estimated
+  // load; one they said wasn't a ride is left out.
+  const merged = mergeRides(t.intervalsRides, t.stravaRides).flatMap((r) => {
+    const d = r.noData ? t.rideDetails?.[r.id] : undefined;
+    if (!d) return [r];
+    if (d.notRide || !d.durationMin) return d.notRide ? [] : [r];
+    const est = estimateLoad(d.durationMin, t.feedback[r.id]?.rpe);
+    const dom = { low: Math.round(est.domain.low), mid: Math.round(est.domain.mid), high: Math.round(est.domain.high) };
+    return [{ ...r, noData: undefined, durationMin: d.durationMin, tss: Math.round(est.tss), domain: dom, ftpSet: t.ftp ?? t.plan?.request.ftp ?? r.ftpSet, estimated: true }];
+  });
   const plan = t.plan;
   const byDate = new Map<DateKey, PlannedSession>();
   const byId = new Map<string, PlannedSession>();
@@ -351,7 +365,9 @@ export function demoTrainingHistory(today: DateKey): { rides: RideRecord[]; well
   const h = { ...sampleHabits(rng), weeklyHours: 9, testEvery: 8, style: 'mixed' as const };
   const a = new SimAthlete(p, rng, addDays(today, -365 - 120));
   liveHistory(a, h, 365, 120);
-  // Leave the latest rides unrated so the demo shows the "how did it feel?" prompt.
-  const rides = a.rides.map((r, i) => (i >= a.rides.length - 2 ? { ...r, rpe: undefined, feel: undefined } : r));
+  // Leave the latest rides unrated so the demo shows the "how did it feel?" prompt,
+  // and make the latest one yesterday's so there's a new ride to review.
+  const yesterday = addDays(today, -1);
+  const rides = a.rides.map((r, i) => (i >= a.rides.length - 2 ? { ...r, rpe: undefined, feel: undefined, ...(i === a.rides.length - 1 && r.date < yesterday && { date: yesterday }) } : r));
   return { rides, wellness: a.wellness };
 }
