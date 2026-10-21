@@ -286,7 +286,7 @@ test('after setup, a tour walks through the app and ends on Today', async ({ pag
     await expect(callout).toBeVisible();
     // Wait for the callout to settle, then check it sits inside the screen.
     await page.waitForTimeout(600);
-    seen.push(await callout.locator('h2').innerText());
+    seen.push(`${await callout.locator('h2').innerText()} ${new URL(page.url()).hash}`);
     const box = (await callout.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
@@ -299,8 +299,8 @@ test('after setup, a tour walks through the app and ends on Today', async ({ pag
     }
     await callout.getByRole('button', { name: 'Next', exact: true }).click();
   }
-  // Every step found its target; none was skipped.
-  expect(seen).toEqual(['Pick a day', 'Your day, in order', 'Daily targets', 'Fuel tank', 'Week', 'Plan', 'Fitness', 'Coach', 'Demo data', 'Settings']);
+  // Every step opened its page and found its target; none was skipped.
+  expect(seen).toEqual(['Your day, in order #/today', 'Daily targets #/today', 'Week #/week', 'Plan #/plan', 'Fitness #/fitness']);
   await expect(page.getByTestId('tour')).toHaveCount(0);
   await expect(page).toHaveURL(/#\/today$/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);

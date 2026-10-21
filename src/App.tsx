@@ -56,7 +56,7 @@ function SyncButton({ compact }: { compact?: boolean }) {
   const sync = useApp((s) => s.sync);
   if (mode === 'demo') {
     return (
-      <button data-tour="sync" onClick={() => navigate('settings', 'section=connections')} className="rounded-full border border-amber/40 bg-amber/10 px-2.5 py-1 text-[11px] font-medium text-amber">
+      <button onClick={() => navigate('settings', 'section=connections')} className="rounded-full border border-amber/40 bg-amber/10 px-2.5 py-1 text-[11px] font-medium text-amber">
         Demo data
       </button>
     );
@@ -64,7 +64,6 @@ function SyncButton({ compact }: { compact?: boolean }) {
   const ago = lastSync ? Math.round((Date.now() - Date.parse(lastSync)) / 60000) : undefined;
   return (
     <button
-      data-tour="sync"
       onClick={() => void sync()}
       title={error ?? (ago !== undefined ? `Synced ${ago} min ago` : 'Sync')}
       className={cx('flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium text-muted hover:bg-raised hover:text-ink', error && 'text-bad')}
@@ -153,7 +152,6 @@ export default function App() {
             <a
               key={id}
               href={`#/${id}`}
-              data-tour={`nav-${id}`}
               className={cx(
                 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition',
                 route === id ? 'bg-raised text-ink' : 'text-muted hover:bg-raised/60 hover:text-ink',
@@ -190,7 +188,7 @@ export default function App() {
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-surface/85 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-md justify-around px-2 pt-1.5">
           {NAV.map(({ id, label, icon: Icon }) => (
-            <a key={id} href={`#/${id}`} data-tour={`nav-${id}`} className={cx('flex w-14 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium', route === id ? 'text-ember' : 'text-muted')}>
+            <a key={id} href={`#/${id}`} className={cx('flex w-14 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium', route === id ? 'text-ember' : 'text-muted')}>
               <Icon size={21} strokeWidth={route === id ? 2.4 : 1.9} />
               {label}
             </a>

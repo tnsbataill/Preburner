@@ -1,13 +1,12 @@
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { create } from 'zustand';
-import { navigate } from '../App';
-import { useApp } from '../state/store';
+import { type Route, navigate } from '../App';
 import { Button } from '../ui/primitives';
 
-/** A guided walk through the app after setup: each step spotlights an element
- *  tagged `data-tour="<target>"` on Today and explains it in a callout. Not
+/** A guided walk through the app after setup: each step opens its page and
+ *  spotlights an element tagged `data-tour="<target>"` with a callout. Not
  *  persisted — it runs when setup finishes or when started from Settings. */
 export const useTour = create<{ open: boolean; start: () => void; close: () => void }>((set) => ({
   open: false,
@@ -19,28 +18,20 @@ export const useTour = create<{ open: boolean; start: () => void; close: () => v
   close: () => set({ open: false }),
 }));
 
-type Step = { target: string; title: string; body: ReactNode };
+type Step = { route: Route; target: string; title: string; body: ReactNode };
 
-function steps(demo: boolean): Step[] {
-  return [
-    { target: 'date-strip', title: 'Pick a day', body: 'Today is selected. Tap any day to see its plan, up to two weeks ahead.' },
-    {
-      target: 'timeline',
-      title: 'Your day, in order',
-      body: 'Meals are timed around your rides: fuel before, carbs during, recovery after. Tap a ride to set when it really starts and the meals move with it. Tick meals off as you eat them.',
-    },
-    { target: 'summary', title: 'Daily targets', body: 'Calories, carbs, protein and fat, set by how hard the day is. Harder days get more carbs; easy days carry most of any weight-loss deficit.' },
-    { target: 'fuel-tank', title: 'Fuel tank', body: 'Estimated muscle glycogen through the day. Try to start hard sessions with a full tank.' },
-    { target: 'nav-week', title: 'Week', body: 'Training hours, intake and expected weight change across the week, day by day.' },
-    { target: 'nav-plan', title: 'Plan', body: 'Your training plan, built from your FTP and goal. It adapts as you rate rides, so review new rides when they show up on Today.' },
-    { target: 'nav-fitness', title: 'Fitness', body: 'Fitness, fatigue and form over time, with a projection toward your target event.' },
-    { target: 'nav-coach', title: 'Coach', body: 'Ask questions about your training and fuelling. It needs an Anthropic key, which you add in Settings.' },
-    demo
-      ? { target: 'sync', title: 'Demo data', body: "You're exploring sample data. Tap here to connect Intervals.icu and use your own rides." }
-      : { target: 'sync', title: 'Sync', body: 'Rides, FTP and weight come from Intervals.icu. Sync runs when you open the app; tap here to sync now.' },
-    { target: 'nav-settings', title: 'Settings', body: 'Goals, meal times, nutrition and connections live here. You can replay this tour from Settings too.' },
-  ];
-}
+const STEPS: Step[] = [
+  {
+    route: 'today',
+    target: 'timeline',
+    title: 'Your day, in order',
+    body: 'Meals are timed around your rides: fuel before, carbs during, recovery after. Tap a ride to set when it really starts, and tick meals off as you eat them. Tap a day along the top to look ahead.',
+  },
+  { route: 'today', target: 'summary', title: 'Daily targets', body: 'Calories, carbs, protein and fat, set by how hard the day is. Harder days get more carbs; easy days carry most of any weight-loss deficit.' },
+  { route: 'week', target: 'week-stats', title: 'Week', body: 'Training hours, intake and expected weight change across the week, with each day laid out below.' },
+  { route: 'plan', target: 'plan', title: 'Plan', body: 'Build a training plan from your FTP and goal, and it fills your calendar. Rate new rides when they show up on Today and the plan adjusts.' },
+  { route: 'fitness', target: 'pmc', title: 'Fitness', body: 'Fitness, fatigue and form over time, with a projection toward your target event.' },
+];
 
 /** The visible copy of a target: nav exists twice (sidebar and tab bar), only one is shown. */
 function findTarget(name: string): HTMLElement | undefined {
@@ -57,8 +48,7 @@ const GUTTER = 16;
 export function Tour() {
   const open = useTour((t) => t.open);
   const close = useTour((t) => t.close);
-  const demo = useApp((s) => s.connection.mode === 'demo');
-  const list = useMemo(() => steps(demo), [demo]);
+  const list = STEPS;
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<Rect>();
   const [callH, setCallH] = useState(0);
@@ -86,6 +76,11 @@ export function Tour() {
     let cancelled = false;
     let frame = 0;
     const started = performance.now();
+    const { route } = list[i];
+    if (!window.location.hash.startsWith(`#/${route}`)) {
+      navigate(route);
+      window.scrollTo(0, 0);
+    }
     const look = () => {
       if (cancelled) return;
       const el = findTarget(list[i].target);

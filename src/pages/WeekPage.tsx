@@ -100,7 +100,7 @@ export function WeekPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-tour="week-stats">
         <Card className="p-4">
           <Stat label="Training" value={week.hours} unit="h" sub={`${week.load} load`} />
         </Card>

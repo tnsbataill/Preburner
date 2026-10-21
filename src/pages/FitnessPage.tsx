@@ -61,7 +61,7 @@ export function FitnessPage() {
         </Card>
       </div>
 
-      <Card className="p-5">
+      <Card className="p-5" data-tour="pmc">
         <SectionTitle>Performance management</SectionTitle>
         <PmcChart points={fitness} today={today} event={goals.eventDate ? { date: goals.eventDate, name: goals.eventName, targetCtl: goals.targetCtl } : undefined} />
         {ramp !== undefined && ramp > goals.maxRampPerWeek && (

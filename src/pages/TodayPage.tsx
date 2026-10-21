@@ -249,9 +249,7 @@ export function TodayPage() {
 
   return (
     <div className="space-y-5">
-      <div data-tour="date-strip">
-        <DateStrip days={strip} selected={day.date} today={today} onSelect={setDate} />
-      </div>
+      <DateStrip days={strip} selected={day.date} today={today} onSelect={setDate} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -283,7 +281,7 @@ export function TodayPage() {
           <div data-tour="summary">
             <DaySummary day={day} weightKg={currentWeightKg} />
           </div>
-          <Card className="p-5" data-tour="fuel-tank">
+          <Card className="p-5">
             <SectionTitle>Fuel tank</SectionTitle>
             <GlycogenChart points={plan.glycogen} day={day} nowMin={isToday ? nowMin : undefined} />
           </Card>

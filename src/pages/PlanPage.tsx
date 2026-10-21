@@ -438,7 +438,7 @@ function PlanView({ plan }: { plan: TrainingPlan }) {
   const objectiveLabel = OBJECTIVES.find((o) => o.value === plan.request.objective)?.label;
   return (
     <div className="space-y-4">
-      <Card className="p-5" data-testid="plan-summary">
+      <Card className="p-5" data-testid="plan-summary" data-tour="plan">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="label mb-1">
@@ -584,7 +584,7 @@ export function PlanPage() {
         <PlanView plan={plan} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <div className="space-y-4">
+          <div className="space-y-4 self-start" data-tour="plan">
             <SetupCard onDone={() => setRegen(false)} />
           </div>
           <div className="space-y-4">
